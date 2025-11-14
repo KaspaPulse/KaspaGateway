@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 """
@@ -15,7 +15,7 @@ from tkinter import END, filedialog, messagebox
 from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 import ttkbootstrap as ttk
-from ttkbootstrap.constants import DANGER, DISABLED, INFO, LEFT, SUCCESS, TOP, X
+from ttkbootstrap.constants import DANGER, DISABLED, INFO, LEFT, SUCCESS, TOP, X, EW, W, NSEW
 from ttkbootstrap.scrolled import ScrolledFrame, ScrolledText
 from ttkbootstrap.toast import ToastNotification
 from ttkbootstrap.tooltip import ToolTip
@@ -30,8 +30,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-# *** FIX: Change BridgeInstanceTab from ScrolledFrame to a standard ttk.Frame ***
-# This stops the entire tab from scrolling and creating empty space.
 class BridgeInstanceTab(ttk.Frame):
     """
     A self-contained ttk.Frame that builds the GUI (View)
@@ -54,10 +52,14 @@ class BridgeInstanceTab(ttk.Frame):
     controls_frame: ttk.Labelframe
     start_button: ttk.Button
     stop_button: ttk.Button
+    apply_restart_button: ttk.Button
     update_button: ttk.Button
     reset_button: ttk.Button
     delete_files_button: ttk.Button
     autostart_cb: ttk.Checkbutton
+    external_process_frame: ttk.Frame
+    external_process_label: ttk.Label
+    external_process_stop_button: ttk.Button
     version_info_frame: ttk.Frame
     local_version_label: ttk.Label
     latest_version_label: ttk.Label
@@ -97,7 +99,6 @@ class BridgeInstanceTab(ttk.Frame):
         """
         Initialize the Bridge Instance Tab View.
         """
-        # *** FIX: Call super() for ttk.Frame, not ScrolledFrame ***
         super().__init__(master, **kwargs)
 
         self.main_window = main_window
@@ -108,16 +109,13 @@ class BridgeInstanceTab(ttk.Frame):
         )
 
         # Build the UI
-        # *** FIX: Parent notebook to self (the Frame) not self.container ***
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill="both", expand=True, padx=0, pady=0)
 
-        # *** FIX: Configure settings tab to hold a ScrolledFrame ***
         self.settings_tab_frame = ttk.Frame(self.notebook, padding=0)
         self.settings_tab_frame.grid_rowconfigure(0, weight=1)
         self.settings_tab_frame.grid_columnconfigure(0, weight=1)
 
-        # *** FIX: Configure log tab to expand fully ***
         self.log_tab_frame = ttk.Frame(self.notebook, padding=0)
         self.log_tab_frame.grid_rowconfigure(0, weight=1)
         self.log_tab_frame.grid_columnconfigure(0, weight=1)
@@ -125,20 +123,18 @@ class BridgeInstanceTab(ttk.Frame):
         self.notebook.add(self.settings_tab_frame, text=translate("Settings"))
         self.notebook.add(self.log_tab_frame, text=translate("Log"))
 
-        # *** FIX: Create a ScrolledFrame *inside* the settings tab ***
         settings_scrolled_frame = ScrolledFrame(self.settings_tab_frame, autohide=True)
         settings_scrolled_frame.grid(row=0, column=0, sticky="nsew")
 
-        # *** FIX: Parent settings_pane to the new ScrolledFrame's container ***
         self.settings_pane = self.create_settings_pane(settings_scrolled_frame.container)
         self.settings_pane.pack(fill="both", expand=True)
 
-        # *** FIX: Place log_pane directly in log_tab_frame using grid ***
         self.log_pane = self.create_log_pane(self.log_tab_frame)
         self.log_pane.grid(row=0, column=0, sticky="nsew")
 
-        # Add tracers from the controller
+        # Add tracers and update preview (which was deferred from controller init)
         self.controller._add_tracers()
+        self.controller.update_command_preview()
 
     def create_settings_pane(self, master: ttk.Frame) -> ttk.Frame:
         """Create the main settings panel with all controls."""
@@ -163,7 +159,10 @@ class BridgeInstanceTab(ttk.Frame):
             bootstyle="round",
         )
         self.command_preview_text.grid(row=0, column=0, sticky="ew")
-        self.command_preview_text.text.config(state="disabled")
+        self.command_preview_text.text.config(state="normal")
+        self.command_preview_text.text.bind(
+            "<KeyRelease>", self.controller.on_manual_command_edit
+        )
 
         self.copy_command_button = ttk.Button(
             self.preview_lf,
@@ -224,12 +223,15 @@ class BridgeInstanceTab(ttk.Frame):
         """Updates the ScrolledText widget with the command string."""
         if hasattr(self, "command_preview_text"):
             try:
-                self.command_preview_text.text.config(state="normal")
-                self.command_preview_text.text.delete("1.0", END)
-                self.command_preview_text.text.insert("1.0", command_str)
-                self.command_preview_text.text.config(state="disabled")
+                # Store cursor position only if not focused
+                if self.focus_get() != self.command_preview_text.text:
+                    self.command_preview_text.text.config(state="normal")
+                    self.command_preview_text.text.delete("1.0", END)
+                    self.command_preview_text.text.insert("1.0", command_str)
             except tk.TclError:
-                pass  # Widget might be destroyed
+                pass
+            except Exception:
+                self.command_preview_text.text.config(state="normal")
 
     def create_controls_frame(self, master: ttk.Frame) -> ttk.Labelframe:
         """Create the main controls frame (Start, Stop, Update, etc.)."""
@@ -237,46 +239,61 @@ class BridgeInstanceTab(ttk.Frame):
             master, text=translate("Controls"), padding=10
         )
 
+        button_frame = ttk.Frame(self.controls_frame)
+        button_frame.pack(fill=X, expand=True, pady=1)
+        button_frame.grid_columnconfigure((0, 1), weight=1, uniform="grp1")
+
         self.start_button = ttk.Button(
-            self.controls_frame,
+            button_frame,
             text=translate("Start Kaspa Bridge"),
             command=self.controller.start_bridge,
             bootstyle=SUCCESS,
         )
-        self.start_button.pack(fill=X, expand=True, pady=2, padx=2)
+        self.start_button.grid(row=0, column=0, sticky=EW, padx=(0, 2), pady=(0, 2))
 
         self.stop_button = ttk.Button(
-            self.controls_frame,
+            button_frame,
             text=translate("Stop Kaspa Bridge"),
             command=self.controller.stop_bridge,
             bootstyle=DANGER,
             state="disabled",
         )
-        self.stop_button.pack(fill=X, expand=True, pady=2, padx=2)
+        self.stop_button.grid(row=0, column=1, sticky=EW, padx=(2, 0), pady=(0, 2))
+
+        self.apply_restart_button = ttk.Button(
+            button_frame,
+            text=translate("Apply & Restart"),
+            command=self.controller.apply_and_restart_bridge,
+            bootstyle="warning",
+            state="disabled",
+        )
+        self.apply_restart_button.grid(row=1, column=0, sticky=EW, padx=(0, 2), pady=(2, 0))
+        ToolTip(self.apply_restart_button, text=translate("Apply changes and restart the bridge (if running)"))
 
         self.update_button = ttk.Button(
-            self.controls_frame,
+            button_frame,
             text=translate("Update Bridge"),
             command=self.controller._on_update_button_pressed,
             bootstyle=INFO,
         )
-        self.update_button.pack(fill=X, expand=True, pady=2, padx=2)
+        self.update_button.grid(row=1, column=1, sticky=EW, padx=(2, 0), pady=(2, 0))
 
         self.reset_button = ttk.Button(
-            self.controls_frame,
+            button_frame,
             text=translate("Reset"),
             command=self.controller.reset_to_defaults,
             bootstyle="warning-outline",
         )
-        self.reset_button.pack(fill=X, expand=True, pady=2, padx=2)
+        self.reset_button.grid(row=2, column=0, sticky=EW, padx=(0, 2), pady=(2, 0))
 
         self.delete_files_button = ttk.Button(
-            self.controls_frame,
+            button_frame,
             text=translate("Delete Bridge Files"),
             command=self.controller._delete_bridge_files,
             bootstyle="danger-outline",
         )
-        self.delete_files_button.pack(fill=X, expand=True, pady=2, padx=2)
+        self.delete_files_button.grid(row=2, column=1, sticky=EW, padx=(2, 0), pady=(2, 0))
+
 
         self.autostart_cb = ttk.Checkbutton(
             self.controls_frame,
@@ -315,6 +332,30 @@ class BridgeInstanceTab(ttk.Frame):
             font="-size 8",
         )
         self.latest_date_label.pack(side=TOP, anchor="w")
+
+        # --- External Process Detection ---
+        self.external_process_frame = ttk.Frame(self.controls_frame, bootstyle="danger")
+        self.external_process_frame.pack(fill=X, expand=True, pady=(5, 0), ipady=5)
+        self.external_process_frame.grid_columnconfigure(1, weight=1)
+
+        self.external_process_label = ttk.Label(
+            self.external_process_frame,
+            text="",  # Controller will set this text
+            bootstyle="danger-inverse",
+            font="-size 8 -weight bold",
+            wraplength=250
+        )
+        self.external_process_label.grid(row=0, column=0, columnspan=2, sticky="ew", padx=5, pady=(0, 5))
+
+        self.external_process_stop_button = ttk.Button(
+            self.external_process_frame,
+            text=translate("Stop External Process"),
+            command=self.controller.stop_external_bridge,
+            bootstyle="danger",
+        )
+        self.external_process_stop_button.grid(row=1, column=0, columnspan=2, sticky="ew", padx=5)
+        
+        self.external_process_frame.pack_forget()  # Hide by default
 
         if self.controller.instance_id == "_1" and self.controller.main_bridge_tab:
             ttk.Separator(self.controls_frame).pack(fill=X, pady=5, padx=2)
@@ -368,6 +409,7 @@ class BridgeInstanceTab(ttk.Frame):
 
             colon_label = ttk.Label(entry_frame, text=":")
             colon_label.pack(side=tk.RIGHT)
+            all_entries.append(colon_label)
 
             ip_entry = ttk.Entry(entry_frame, textvariable=ip_var)
             ip_entry.pack(side=tk.RIGHT, fill="x", expand=True, padx=(0, 2))
@@ -767,6 +809,7 @@ class BridgeInstanceTab(ttk.Frame):
 
             self.output_text.text.config(state="normal")
             start_index: str = self.output_text.text.index("end-1c linestart")
+
             self.output_text.text.insert("end", text_line)
             end_index: str = self.output_text.text.index("end-1c lineend")
             line_content: str = self.output_text.text.get(start_index, end_index).strip()
@@ -784,6 +827,7 @@ class BridgeInstanceTab(ttk.Frame):
                 tag = "trace"
             elif "--- Starting" in line_content or "--- Process Terminated" in line_content:
                 tag = "separator"
+
             self.output_text.text.tag_add(tag, start_index, end_index)
 
             ts_match: Optional[re.Match[str]] = re.search(r'time="([^"]+)"', line_content)
@@ -831,6 +875,7 @@ class BridgeInstanceTab(ttk.Frame):
 
         self.start_button.config(text=translate("Start Kaspa Bridge"))
         self.stop_button.config(text=translate("Stop Kaspa Bridge"))
+        self.apply_restart_button.config(text=translate("Apply & Restart"))
 
         # self.update_button text is handled by _update_update_button_logic
 
@@ -840,7 +885,7 @@ class BridgeInstanceTab(ttk.Frame):
         self.autostart_cb.config(text=translate("Start Bridge on App Launch"))
 
         if self.controller.instance_id == "_1" and hasattr(self, "enable_bridge_2_cb"):
-            self.enable_bridge_2_cb.config(text=translate("Enable Bridge 2"))
+             self.enable_bridge_2_cb.config(text=translate("Enable Bridge 2"))
 
         self.main_settings_frame.config(text=translate("Main Settings"))
         self.main_settings_frame.winfo_children()[0].winfo_children()[0].config(
@@ -960,7 +1005,6 @@ class KaspaBridgeTab(ttk.Frame):
 
         # Bridge 1 (Always present)
         self.bridge1_frame = ttk.Frame(self.notebook, padding=0)
-        # *** FIX: Configure grid for the frame holding the instance ***
         self.bridge1_frame.grid_rowconfigure(0, weight=1)
         self.bridge1_frame.grid_columnconfigure(0, weight=1)
         
@@ -971,13 +1015,11 @@ class KaspaBridgeTab(ttk.Frame):
             instance_id="_1",
             main_bridge_tab=self,
         )
-        # *** FIX: Use .grid() instead of .pack() to fill the frame ***
         self.bridge1_tab_instance.grid(row=0, column=0, sticky="nsew")
         self.notebook.add(self.bridge1_frame, text=translate("Bridge 1"))
 
         # Bridge 2 (Conditional)
         self.bridge2_frame = ttk.Frame(self.notebook, padding=0)
-        # *** FIX: Configure grid for the frame holding the instance ***
         self.bridge2_frame.grid_rowconfigure(0, weight=1)
         self.bridge2_frame.grid_columnconfigure(0, weight=1)
         
@@ -1013,7 +1055,6 @@ class KaspaBridgeTab(ttk.Frame):
                     instance_id="_2",
                     main_bridge_tab=self,
                 )
-                # *** FIX: Use .grid() instead of .pack() to fill the frame ***
                 self.bridge2_tab_instance.grid(row=0, column=0, sticky="nsew")
             try:
                 self.notebook.add(self.bridge2_frame, text=translate("Bridge 2"))
@@ -1021,7 +1062,6 @@ class KaspaBridgeTab(ttk.Frame):
                 pass  # Tab already exists
         else:
             if self.bridge2_tab_instance is not None:
-                # Check controller for running process
                 if (
                     self.bridge2_tab_instance.controller.bridge_process
                     and self.bridge2_tab_instance.controller.bridge_process.poll() is None
@@ -1037,7 +1077,7 @@ class KaspaBridgeTab(ttk.Frame):
                 try:
                     self.notebook.forget(self.bridge2_frame)
                 except tk.TclError:
-                    pass  # Tab already forgotten
+                    pass
                 self.bridge2_tab_instance.destroy()
                 self.bridge2_tab_instance = None
 
@@ -1062,7 +1102,7 @@ class KaspaBridgeTab(ttk.Frame):
         call the activate_tab method of the newly selected tab's controller.
         """
         if not self.first_activation_done:
-            return  # Wait for main activate_tab to fire
+            return
         self._activate_current_sub_tab()
 
     def on_close(self) -> None:
@@ -1100,7 +1140,7 @@ class KaspaBridgeTab(ttk.Frame):
             if self.bridge2_tab_instance:
                 self.bridge2_tab_instance.controller.set_controls_state(active)
         except tk.TclError:
-            pass  # Widgets might be destroyed
+            pass
 
     def activate_tab(self) -> None:
         """
@@ -1109,7 +1149,6 @@ class KaspaBridgeTab(ttk.Frame):
         """
         if not self.first_activation_done:
             self.first_activation_done = True
-            # Delay to ensure window is drawn before prompting
             self.after(100, self._activate_current_sub_tab)
         else:
             self._activate_current_sub_tab()

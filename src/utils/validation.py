@@ -1,9 +1,12 @@
-﻿# src/utils/validation.py
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 """
 Provides validation, sanitization, and helper functions for user input
 and other data.
 """
 
+from __future__ import annotations
 import re
 import logging
 from urllib.parse import urlparse
@@ -14,7 +17,9 @@ logger = logging.getLogger(__name__)
 
 # This is loaded at runtime, so we initialize it here.
 # It's used to prevent validating placeholder text as a real address.
-_address_placeholders: Set[str] = get_all_translations_for_key("Enter Kaspa Address or Select from Dropdown")
+_address_placeholders: Set[str] = get_all_translations_for_key(
+    "Enter Kaspa Address or Select from Dropdown"
+)
 
 
 def _sanitize_for_logging(log_message: Any) -> str:
@@ -27,23 +32,25 @@ def _sanitize_for_logging(log_message: Any) -> str:
             log_message = str(log_message)
         except Exception:
             return "[Unloggable Content]"
-    return log_message.replace('\n', ' ').replace('\r', ' ')
+    return log_message.replace("\n", " ").replace("\r", " ")
 
 
 def validate_kaspa_address(address: str) -> bool:
     """
-    Validates a Kaspa address string against the 'kaspa:' prefix and bech32m-like pattern.
-    Also checks against known placeholder strings.
+    Validates a Kaspa address string against the 'kaspa:' prefix and
+    bech32m-like pattern. Also checks against known placeholder strings.
     """
     global _address_placeholders
     if not _address_placeholders:
         # Re-fetch if it was empty during module import
-        _address_placeholders = get_all_translations_for_key("Enter Kaspa Address or Select from Dropdown")
+        _address_placeholders = get_all_translations_for_key(
+            "Enter Kaspa Address or Select from Dropdown"
+        )
 
     if not isinstance(address, str) or not address:
         return False
 
-    address_lower = address.lower()
+    address_lower = address.lower().strip()
 
     if address in _address_placeholders:
         return False
@@ -54,7 +61,9 @@ def validate_kaspa_address(address: str) -> bool:
 
     if not is_valid:
         if address not in _address_placeholders:
-            logger.warning(f"Address validation FAILED for: {_sanitize_for_logging(address)}")
+            logger.warning(
+                f"Address validation FAILED for: {_sanitize_for_logging(address)}"
+            )
 
     return is_valid
 
@@ -71,14 +80,18 @@ def validate_url(url: str) -> bool:
 def validate_ip_port(ip_port: str) -> Optional[Tuple[str, str]]:
     """
     Validates if a string is a valid [host_or_ip]:port combination.
+    Supports IPv4, IPv6 (in brackets), hostnames, and empty host (e.g., :port).
     Returns (host, port) tuple if valid, else None.
     """
     if not ip_port:
         return None
 
-    # Regex for optional host/IP (allowing hostnames with dots/dashes)
-    # and mandatory port
-    match = re.match(r"^([\w\.\-]*)?:(\d+)$", ip_port)
+    # Regex to match:
+    # 1. [ipv6]:port (e.g., [::1]:16110)
+    # 2. host.name:port (e.g., localhost:16110)
+    # 3. 127.0.0.1:port
+    # 4. :port (e.g., :16110)
+    match = re.match(r"^(?:(\[.+\]|[\w\.\-]+))?:(\d+)$", ip_port.strip())
     if not match:
         return None
 
@@ -92,6 +105,8 @@ def validate_ip_port(ip_port: str) -> Optional[Tuple[str, str]]:
     except ValueError:
         return None
 
+    # Note: We don't do a full IPv6/hostname validation here,
+    # just structural matching.
     return ip_or_host, port
 
 
@@ -103,7 +118,7 @@ def sanitize_input_string(input_str: str, max_length: int = 100) -> str:
     if not isinstance(input_str, str):
         return ""
     # Whitelist alphanumeric, space, dash, underscore, parentheses
-    sanitized = re.sub(r'[^a-zA-Z0-9 \-_()]', '', input_str)
+    sanitized = re.sub(r"[^a-zA-Z0-9 \-_()]", "", input_str)
     return sanitized.strip()[:max_length]
 
 
@@ -119,31 +134,37 @@ def sanitize_cli_arg(arg_str: str) -> str:
         return ""
 
     # 1. Block path traversal
-    if '..' in arg_str:
-        logger.warning(f"Blocked potential path traversal: {_sanitize_for_logging(arg_str)}")
+    if ".." in arg_str:
+        logger.warning(
+            f"Blocked potential path traversal: {_sanitize_for_logging(arg_str)}"
+        )
         return ""
 
     # 2. Remove simple quotes. Stricter sanitization will follow.
-    sanitized = re.sub(r"['\"]", '', arg_str)
+    sanitized = re.sub(r"['\"]", "", arg_str)
 
     # 3. Whitelist allowed characters.
     # Allows alphanumeric, dash, underscore, colon (for IPs/paths),
-    # dot, slashes (for paths), and spaces (for paths with spaces).
-    sanitized = re.sub(r'[^a-zA-Z0-9\-_:./\\\s]', '', sanitized)
+    # dot, slashes (for paths), spaces (for paths), and brackets (for IPv6).
+    sanitized = re.sub(r"[^a-zA-Z0-9\-_:./\\\[\]\s]", "", sanitized)
 
     # 4. Block argument injection prefixes
     stripped_arg = sanitized.lstrip()
 
-    if stripped_arg.startswith('-'):
-        logger.warning(f"Blocked potential argument injection (prefix '-'): {_sanitize_for_logging(arg_str)}")
+    if stripped_arg.startswith("-"):
+        logger.warning(
+            f"Blocked potential argument injection (prefix '-'): {_sanitize_for_logging(arg_str)}"
+        )
         return ""
 
-    if stripped_arg.startswith('/'):
+    if stripped_arg.startswith("/"):
         # Block arguments that start with '/' AND contain a space,
         # as this is a common injection pattern (e.g., "/c calc.exe").
         # This still allows valid *NIX paths (e.g., "/var/log").
-        if ' ' in stripped_arg:
-            logger.warning(f"Blocked potential argument injection (prefix '/' with space): {_sanitize_for_logging(arg_str)}")
+        if " " in stripped_arg:
+            logger.warning(
+                f"Blocked potential argument injection (prefix '/' with space): {_sanitize_for_logging(arg_str)}"
+            )
             return ""
 
     return sanitized
@@ -159,7 +180,7 @@ def sanitize_csv_cell(cell_value: Any) -> str:
     str_val = str(cell_value)
 
     # Prepend an apostrophe if the value starts with a risky character
-    if str_val.startswith(('=', '+', '-', '@', '|')):
+    if str_val.startswith(("=", "+", "-", "@", "|")):
         return f"'{str_val}"
 
     return str_val

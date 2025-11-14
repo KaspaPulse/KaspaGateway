@@ -11,17 +11,16 @@ from __future__ import annotations
 import logging
 import os
 import re
-import signal
+import shlex
 import subprocess
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING, cast
-from types import FrameType
 
 import psutil
 import ttkbootstrap as ttk
-from ttkbootstrap.constants import DANGER, INFO, SUCCESS, DISABLED, NORMAL
+from ttkbootstrap.constants import DANGER, INFO, SUCCESS, DISABLED, NORMAL, X, END
 from ttkbootstrap.toast import ToastNotification
 
 from src.config.config import CONFIG
@@ -69,11 +68,12 @@ class BridgeInstanceController:
     bridge_dir: str
     bridge_exe_path: str
     config_yaml_path: str
+    running_command_str: str
+    external_process_pid: Optional[int]
     all_vars_list: List[Tuple[Any, str, Any]]
     key_to_enabled_var_map: Dict[str, ttk.BooleanVar]
     flag_key_to_enabled_var_map: Dict[str, ttk.BooleanVar]
-    
-    # Dynamic variables defined in define_variables
+
     kaspa_addr_var: Tuple[ttk.StringVar, ttk.StringVar]
     stratum_port_var: ttk.StringVar
     prom_port_var: ttk.StringVar
@@ -138,6 +138,8 @@ class BridgeInstanceController:
         self.version_checker: Optional[VersionChecker] = None
         self.first_activation_done: bool = False
         self.is_updating: bool = False
+        self.running_command_str: str = ""
+        self.external_process_pid: Optional[int] = None
 
         self.bridge_dir: str = os.path.join(
             os.getenv("LOCALAPPDATA", CONFIG["paths"]["database"]),
@@ -152,7 +154,6 @@ class BridgeInstanceController:
             self.bridge_dir, "config.yaml"
         )
 
-
         self.define_variables()
         self._load_settings()
 
@@ -164,7 +165,7 @@ class BridgeInstanceController:
         ):
             self.config_yaml_path = self.custom_config_path_var.get()
 
-        self.update_command_preview()
+        # Do not call update_command_preview() here; wait for view to build.
 
     def _bool_to_str(self, b_val: bool) -> str:
         """Converts a boolean to its string representation."""
@@ -176,7 +177,6 @@ class BridgeInstanceController:
 
     def define_variables(self) -> None:
         """Initialize all ttk variables for the GUI controls."""
-        # Use default ports 5555/2112 for _1, and 5556/2113 for _2
         default_stratum: str = ":5555" if self.instance_id == "_1" else ":5556"
         default_prom: str = ":2112" if self.instance_id == "_1" else ":2113"
 
@@ -260,8 +260,8 @@ class BridgeInstanceController:
         self.vardiff_stats_enabled_var: ttk.BooleanVar = ttk.BooleanVar(
             value=False
         )
+        # --- End Variable Definitions ---
 
-        # --- Version Checker ---
         self.version_checker: VersionChecker = VersionChecker(
             asset_name="ks_bridge.exe",
             version_var=self.latest_bridge_version_var,
@@ -270,7 +270,6 @@ class BridgeInstanceController:
             repo_url="https://api.github.com/repos/aglov413/kaspa-stratum-bridge/releases/latest",
         )
 
-        # --- Variable Mapping ---
         self.all_vars_list: List[Tuple[Any, str, Any]] = [
             (self.kaspa_addr_var, "kaspa_addr_var", ("127.0.0.1", "16110")),
             (self.stratum_port_var, "stratum_port_var", default_stratum),
@@ -348,45 +347,34 @@ class BridgeInstanceController:
         for var_tuple, key, default in self.all_vars_list:
             saved_value: Any = bridge_config.get(key, default)
 
-            if key in ["kaspa_addr_var", "stratum_port_var", "prom_port_var", "hcp_var"]:
-                ip_port_str: str = ""
-                if isinstance(var_tuple, tuple) and len(var_tuple) == 2:
-                    ip_port_str = (
-                        f"{saved_value[0]}:{saved_value[1]}"
-                        if isinstance(saved_value, (list, tuple))
-                        else str(saved_value)
-                    )
-                elif isinstance(var_tuple, ttk.StringVar):
-                    ip_port_str = str(saved_value)
-
-                validation_result: Optional[Tuple[str, str]] = validate_ip_port(ip_port_str)
-                if validation_result:
-                    ip, port = validation_result
-                    if isinstance(var_tuple, tuple):
+            try:
+                if key == "kaspa_addr_var":
+                    if isinstance(saved_value, (list, tuple)) and len(saved_value) == 2:
+                        var_tuple[0].set(saved_value[0])
+                        var_tuple[1].set(saved_value[1])
+                    elif isinstance(saved_value, str):
+                        ip, port = (validate_ip_port(saved_value) or default)
                         var_tuple[0].set(ip)
                         var_tuple[1].set(port)
-                    elif isinstance(var_tuple, ttk.StringVar):
-                        var_tuple.set(ip_port_str)
-                    continue
-
+                    else:
+                        var_tuple[0].set(default[0])
+                        var_tuple[1].set(default[1])
+                elif key in self.flag_key_to_enabled_var_map:
+                    if isinstance(saved_value, bool):
+                        var_tuple.set(self._bool_to_str(saved_value))
+                    else:
+                        var_tuple.set(str(saved_value))
+                elif isinstance(var_tuple, (ttk.StringVar, ttk.BooleanVar, ttk.IntVar)):
+                    var_tuple.set(saved_value)
+            except Exception as e:
+                logger.error(f"Error loading setting for {key}: {e}. Resetting to default.")
                 if isinstance(var_tuple, tuple):
-                    default_ip, default_port = default
-                    var_tuple[0].set(default_ip)
-                    var_tuple[1].set(default_port)
-                elif isinstance(var_tuple, ttk.StringVar):
-                    var_tuple.set(default)
-                continue
-
-            if key in self.flag_key_to_enabled_var_map:
-                if isinstance(saved_value, bool):
-                    var_tuple.set(self._bool_to_str(saved_value))
+                    var_tuple[0].set(default[0])
+                    var_tuple[1].set(default[1])
                 else:
-                    var_tuple.set(str(saved_value))
-                continue
-
-
-            if isinstance(var_tuple, (ttk.StringVar, ttk.BooleanVar, ttk.IntVar)):
-                var_tuple.set(saved_value)
+                    var_tuple.set(default)
+        
+        self.view.after(100, self.update_command_preview)
 
     def _save_settings(self, *args: Any) -> None:
         """Save the current state of ttk variables to the config manager."""
@@ -397,7 +385,6 @@ class BridgeInstanceController:
 
             if key in self.flag_key_to_enabled_var_map:
                 value_to_save = self._str_to_bool(var_tuple.get())
-
             elif isinstance(var_tuple, (ttk.StringVar, ttk.BooleanVar, ttk.IntVar)):
                 value_to_save = var_tuple.get()
             elif isinstance(var_tuple, tuple) and len(var_tuple) == 2:
@@ -415,10 +402,36 @@ class BridgeInstanceController:
         self.config_manager.get_config()[self.config_key] = bridge_config
         self.config_manager.save_config(self.config_manager.get_config())
 
+    def on_manual_command_edit(self, *args: Any) -> None:
+        """
+        Called when the user types in the command preview box.
+        """
+        is_running: bool = bool(self.bridge_process and self.bridge_process.poll() is None)
+        if is_running:
+            try:
+                new_command: str = self.view.command_preview_text.text.get("1.0", "end-1c").strip()
+                if new_command != self.running_command_str:
+                    self.view.apply_restart_button.config(state="normal")
+                else:
+                    self.view.apply_restart_button.config(state="disabled")
+            except tk.TclError:
+                pass
+
     def _save_and_update_preview(self, *args: Any) -> None:
         """Wrapper to update preview and save settings, for use in tracers."""
         self.update_command_preview()
         self._save_settings()
+        
+        is_running: bool = bool(self.bridge_process and self.bridge_process.poll() is None)
+        new_command: str = self.command_preview_var.get()
+        
+        try:
+            if is_running and new_command != self.running_command_str:
+                self.view.apply_restart_button.config(state="normal")
+            else:
+                self.view.apply_restart_button.config(state="disabled")
+        except tk.TclError:
+            pass
 
     def _add_tracers(self) -> None:
         """Add 'write' tracers to all variables to auto-save and update."""
@@ -484,12 +497,20 @@ class BridgeInstanceController:
         command_str: str = " ".join(command_list)
         self.command_preview_var.set(command_str)
 
-        if hasattr(self.view, "update_preview_text_widget"):
-            self.view.update_preview_text_widget(command_str)
+        if hasattr(self.view, "command_preview_text"):
+             try:
+                if self.view.focus_get() != self.view.command_preview_text.text:
+                    self.view.command_preview_text.text.config(state="normal")
+                    current_content = self.view.command_preview_text.text.get("1.0", tk.END).strip()
+                    if current_content != command_str:
+                        self.view.command_preview_text.text.delete("1.0", tk.END)
+                        self.view.command_preview_text.text.insert("1.0", command_str)
+             except tk.TclError:
+                 pass
 
     def copy_command_to_clipboard(self) -> None:
         """Copy the generated command string to the user's clipboard."""
-        command: str = self.command_preview_var.get()
+        command: str = self.view.command_preview_text.text.get("1.0", "end-1c").strip()
         if command:
             self.main_window.clipboard_clear()
             self.main_window.clipboard_append(command)
@@ -515,6 +536,7 @@ class BridgeInstanceController:
 
         self.update_command_preview()
 
+        is_running: bool = bool(self.bridge_process and self.bridge_process.poll() is None)
         file_exists: bool = os.path.exists(
             self.bridge_exe_path
         ) and os.path.exists(self.config_yaml_path)
@@ -534,7 +556,7 @@ class BridgeInstanceController:
         if args and isinstance(args[0], bool):
             is_globally_active = args[0]
 
-        if is_app_busy or is_custom_exe or not is_globally_active:
+        if is_app_busy or is_custom_exe or not is_globally_active or is_running:
             self.view.update_button.config(state="disabled")
         else:
             self.view.update_button.config(state="normal")
@@ -544,7 +566,6 @@ class BridgeInstanceController:
         self.view.toggle_entry_state(
             self.use_custom_exe_var, [self.view.exe_entry, self.view.exe_browse]
         )
-
         
         if self.use_custom_exe_var.get():
             self.use_custom_config_var.set(True) 
@@ -582,7 +603,6 @@ class BridgeInstanceController:
         self.view.toggle_entry_state(
             self.use_custom_url_var, custom_url_widgets
         )
-        
         
         if self.use_custom_url_var.get():
             self.use_custom_exe_var.set(False)
@@ -802,7 +822,6 @@ class BridgeInstanceController:
 
         threading.Thread(target=worker, daemon=True).start()
 
-
     def activate_tab(self) -> None:
         """
         Called when the tab becomes visible.
@@ -810,6 +829,8 @@ class BridgeInstanceController:
         if not self.first_activation_done:
             self.first_activation_done = True
             self.view.after(100, self._delayed_activation_check)
+        
+        self._check_for_external_process()
         
         if (
             self.latest_bridge_version_var.get()
@@ -826,6 +847,7 @@ class BridgeInstanceController:
             if not self.view.winfo_exists():
                 return
                 
+            self.update_command_preview()
             self._update_update_button_logic()
 
             file_exists: bool = os.path.exists(
@@ -885,7 +907,7 @@ class BridgeInstanceController:
                     try:
                         if not self.view.winfo_exists():
                             break
-                        self.log_message(line.decode("utf-8", errors="ignore"))
+                        self.log_message(line.decode("utf-8", errors="ignore").strip())
                     except (tk.TclError, RuntimeError):
                         break
         except Exception as e:
@@ -895,7 +917,7 @@ class BridgeInstanceController:
             ):
                 try:
                     if self.view.winfo_exists():
-                        self.log_message(f"Error reading process output: {e}\n")
+                        self.log_message(f"Error reading process output: {e}")
                 except (tk.TclError, RuntimeError):
                     pass
         finally:
@@ -941,6 +963,9 @@ class BridgeInstanceController:
                         sanitize_cli_arg(var_tuple[1].get()),
                     )
                     val: str = f"{ip}:{port}"
+                    if not ip and port:
+                        val = f":{port}"
+                    
                     if ip or port:
                         args.extend([arg_name, val])
                 elif isinstance(var_tuple, ttk.StringVar):
@@ -960,15 +985,54 @@ class BridgeInstanceController:
     def start_bridge(self, is_autostart: bool = False) -> None:
         """Start the kaspa-stratum-bridge subprocess."""
         if self.bridge_process and self.bridge_process.poll() is None:
-            self.log_message(f"{translate('Bridge is already running.')}\n")
+            self.log_message(f"{translate('Bridge is already running.')}")
+            return
+            
+        self._check_for_external_process()
+        if self.external_process_pid:
+            msg = f"External ks_bridge.exe found (PID: {self.external_process_pid}). Stop it to run the bridge here."
+            self.log_message(msg)
+            if not is_autostart:
+                messagebox.showerror(translate("Error"), translate(msg))
             return
 
-        self.update_command_preview()
+        command_list: List[str] = []
+        command_str: str = ""
+        exe_path_to_check: str = ""
+        config_path_to_check: str = ""
 
-        exe_path_to_check: str = self.bridge_exe_path
+        try:
+            command_str = self.view.command_preview_text.text.get("1.0", "end-1c").strip()
+            if command_str:
+                command_list = shlex.split(command_str)
+            
+            if not command_list:
+                self.log_message("Command preview is empty. Building command from settings...")
+                command_list = self.build_args_from_settings()
+                command_str = " ".join(command_list)
+                if not command_list:
+                     messagebox.showerror(translate("Invalid Input"), "Command is empty.")
+                     return
+            
+            exe_path_to_check = command_list[0]
+            
+            try:
+                config_arg_index = command_list.index("-config")
+                config_path_to_check = command_list[config_arg_index + 1]
+            except (ValueError, IndexError):
+                if self.use_custom_config_var.get() and self.custom_config_path_var.get():
+                    config_path_to_check = self.custom_config_path_var.get()
+                else:
+                    config_path_to_check = os.path.join(self.bridge_dir, "config.yaml")
+
+        except Exception as e:
+            self.log_message(f"Error parsing command: {e}")
+            if not is_autostart:
+                messagebox.showerror(translate("Invalid Input"), f"Could not parse command: {e}")
+            return
+            
         exe_name: str = os.path.basename(exe_path_to_check).lower()
 
-        # Security Check 1: Block known system shells
         if exe_name in ["cmd.exe", "powershell.exe", "pwsh.exe", "bash.exe", "sh.exe"]:
             self.log_message("Error: Executable cannot be a system shell.")
             if not is_autostart:
@@ -978,80 +1042,66 @@ class BridgeInstanceController:
                 )
             return
 
-        # Security Check 2: Check if it's a file (not a directory or non-existent)
         if not os.path.isfile(exe_path_to_check) or not os.path.exists(
-            self.config_yaml_path
+            config_path_to_check
         ):
-            self.log_message(
-                f"{translate('Error')}: {translate('Bridge files not found.')}\n"
-                f"EXE: {_sanitize_for_logging(exe_path_to_check)}\n"
-                f"Config: {_sanitize_for_logging(self.config_yaml_path)}\n"
-            )
-            self._update_update_button_logic()
-            self.log_message(
-                f"{translate('Please update the bridge first using the \"Update Bridge\" button.')}\n"
-            )
-            if not is_autostart:
-                messagebox.showerror(
-                    translate("Error"),
-                    translate(
-                        "Please update the bridge first using the 'Update Bridge' button."
-                    ),
+            self.log_message(f"File not found at '{exe_path_to_check}' or '{config_path_to_check}'. Rebuilding command...")
+            command_list = self.build_args_from_settings()
+            command_str = " ".join(command_list)
+            exe_path_to_check = self.bridge_exe_path
+            config_path_to_check = self.config_yaml_path
+
+            if not os.path.isfile(exe_path_to_check) or not os.path.exists(
+                config_path_to_check
+            ):
+                msg = (
+                    f"{translate('Error')}: {translate('File not found')}:\n"
+                    f"EXE: {_sanitize_for_logging(exe_path_to_check)}\n"
+                    f"Config: {_sanitize_for_logging(config_path_to_check)}\n"
+                    f"{translate('Please update the bridge first using the \"Update Bridge\" button.')}"
                 )
-            return
+                self.log_message(msg)
+                self._update_update_button_logic()
+                if not is_autostart:
+                    messagebox.showerror(
+                        translate("Error"),
+                        f"{translate('File not found')}: {exe_path_to_check} or {config_path_to_check}. "
+                        f"{translate('Please update the bridge first using the \"Update Bridge\" button.')}"
+                    )
+                return
+
+        self.bridge_exe_path = exe_path_to_check
+        self.config_yaml_path = config_path_to_check
 
         try:
-            self._save_settings()
-            command_list: List[str] = self.build_args_from_settings()
+            ip_port_args = {"-kaspa", "-stratum", "-prom", "-hcp"}
+            ipv6_pattern = re.compile(r'^\[[0-9a-fA-F:]+\]:(\d+)$')
 
-            if self.kaspa_addr_enabled_var.get():
-                kaspa_addr_val: str = (
-                    f"{sanitize_cli_arg(self.kaspa_addr_var[0].get())}:"
-                    f"{sanitize_cli_arg(self.kaspa_addr_var[1].get())}"
-                )
-                if not validate_ip_port(kaspa_addr_val):
-                    messagebox.showerror(
-                        translate("Invalid Input"),
-                        "Invalid Kaspa address IP/Port for -kaspa.",
-                    )
-                    return
-
-            if self.stratum_port_enabled_var.get() and not validate_ip_port(
-                self.stratum_port_var.get()
-            ):
-                messagebox.showerror(
-                    translate("Invalid Input"), "Invalid Stratum IP/Port for -stratum."
-                )
-                return
-
-            if self.prom_port_enabled_var.get() and not validate_ip_port(
-                self.prom_port_var.get()
-            ):
-                messagebox.showerror(
-                    translate("Invalid Input"),
-                    "Invalid Prometheus IP/Port for -prom.",
-                )
-                return
-
-            if (
-                self.hcp_enabled_var.get()
-                and self.hcp_var.get()
-                and not validate_ip_port(self.hcp_var.get())
-            ):
-                messagebox.showerror(
-                    translate("Invalid Input"),
-                    "Invalid Health Check IP/Port for -hcp.",
-                )
-                return
+            for i, arg in enumerate(command_list):
+                arg_key = arg.split("=")[0]
+                if arg_key in ip_port_args:
+                    value = ""
+                    if "=" in arg:
+                        value = arg.split("=", 1)[1]
+                    elif i + 1 < len(command_list):
+                        value = command_list[i+1]
+                    
+                    if value and not validate_ip_port(value) and not ipv6_pattern.match(value):
+                        if not is_autostart:
+                            messagebox.showerror(
+                                translate("Invalid Input"),
+                                f"Invalid IP/Port format for {arg_key}: {value}",
+                            )
+                        return
 
             working_dir: str = os.path.dirname(self.config_yaml_path)
 
             self.log_message(f"--- {translate('Starting Bridge')} ---")
             self.log_message(
-                f"{translate('Working Directory')}:\n{_sanitize_for_logging(working_dir)}\n"
+                f"{translate('Working Directory')}:\n{_sanitize_for_logging(working_dir)}"
             )
-            self.log_message(f"{translate('Command')}:\n{' '.join(command_list)}\n")
-            self.log_message("...\n")
+            self.log_message(f"{translate('Command')}:\n{command_str}")
+            self.log_message("...")
 
             startupinfo: subprocess.STARTUPINFO = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
@@ -1066,6 +1116,8 @@ class BridgeInstanceController:
                 creationflags=subprocess.CREATE_NO_WINDOW,
                 text=False,
             )
+            
+            self.running_command_str = command_str
 
             threading.Thread(
                 target=self.read_output,
@@ -1079,67 +1131,138 @@ class BridgeInstanceController:
 
         except Exception as e:
             self.log_message(
-                f"Failed to start Kaspa Bridge: {_sanitize_for_logging(e)}\n"
+                f"Failed to start Kaspa Bridge: {_sanitize_for_logging(e)}"
             )
             self.bridge_process = None
 
     def on_process_exit(self) -> None:
         """Callback function when the subprocess terminates."""
+        self.running_command_str = ""
         try:
-            self.log_message(f"\n--- {translate('Process Terminated')} ---\n")
+            self.log_message(f"\n--- {translate('Process Terminated')} ---")
             if self.view.start_button.winfo_exists():
                 self.view.start_button.config(state="normal")
             if self.view.stop_button.winfo_exists():
                 self.view.stop_button.config(state="disabled")
+            if self.view.apply_restart_button.winfo_exists():
+                self.view.apply_restart_button.config(state="disabled")
         except (tk.TclError, RuntimeError):
             pass
         self.bridge_process = None
         try:
             if self.view.winfo_exists():
                 self.view.after(0, self.set_controls_state, True)
+                self.view.after(100, self._check_for_external_process)
         except (tk.TclError, RuntimeError):
             pass
+            
+    def apply_and_restart_bridge(self) -> None:
+        """Stops the bridge (if running) and starts it with the new command."""
+        self.log_message("Apply & Restart requested...")
+        if self.bridge_process and self.bridge_process.poll() is None:
+            self.log_message("Stopping current bridge process...")
+            self.stop_bridge()
+            self.view.after(1000, self._wait_for_stop_and_start)
+        else:
+            self.start_bridge()
+            
+    def _wait_for_stop_and_start(self, timeout: int = 5000) -> None:
+        """Helper to wait for process to stop before restarting."""
+        if self.bridge_process and self.bridge_process.poll() is None and timeout > 0:
+            self.view.after(500, self._wait_for_stop_and_start, timeout - 500)
+        elif timeout <= 0:
+            self.log_message("Error: Bridge did not stop in time. Cannot restart.")
+            self.on_process_exit()
+        else:
+            self.log_message("Bridge stopped. Restarting...")
+            self.start_bridge()
 
     def stop_bridge(self) -> None:
         """Stop the running subprocess and its children using psutil."""
         if self.bridge_process and self.bridge_process.poll() is None:
             try:
-                self.log_message(translate("Stopping Kaspa Bridge...") + "\n")
-
-                # Get the process and its children
+                self.log_message(translate("Stopping Kaspa Bridge..."))
                 parent: psutil.Process = psutil.Process(self.bridge_process.pid)
                 children: List[psutil.Process] = parent.children(recursive=True)
 
-                # Terminate the children first
                 for child in children:
                     try:
                         child.terminate()
                     except psutil.NoSuchProcess:
                         pass
                 
-                # Terminate the parent process
                 self.bridge_process.terminate()
-
-                # Wait for processes to exit
                 psutil.wait_procs(children, timeout=3)
 
             except psutil.NoSuchProcess:
-                 self.log_message(translate("Bridge is not running.") + "\n")
-
+                 self.log_message(translate("Bridge is not running."))
             except Exception as e:
                 self.log_message(
-                    f"Error while stopping bridge: {_sanitize_for_logging(e)}\n"
+                    f"Error while stopping bridge: {_sanitize_for_logging(e)}"
                 )
             finally:
-                # Fallback check before UI update to prevent TclError on shutdown
                 try:
                     if self.view.winfo_exists():
                         self.on_process_exit()
                 except tk.TclError:
                     pass
-
         else:
-            self.log_message(f"{translate('Bridge is not running.')}\n")
+            self.log_message(f"{translate('Bridge is not running.')}")
+
+    def _check_for_external_process(self) -> None:
+        """Scans for external ks_bridge processes."""
+        self.external_process_pid = None
+        my_pid: Optional[int] = self.bridge_process.pid if self.bridge_process else None
+        
+        try:
+            for proc in psutil.process_iter(['pid', 'name']):
+                if proc.name().lower() == "ks_bridge.exe" and proc.pid != my_pid:
+                    self.external_process_pid = proc.pid
+                    break
+        except Exception as e:
+            logger.warning(f"Failed to scan for external processes: {e}")
+            
+        self._update_external_process_ui()
+
+    def _update_external_process_ui(self) -> None:
+        """Shows or hides the external process warning frame."""
+        try:
+            if self.external_process_pid:
+                msg = translate("External ks_bridge.exe found (PID: {}). Stop it to run the bridge here.").format(self.external_process_pid)
+                self.view.external_process_label.config(text=msg)
+                self.view.external_process_frame.pack(fill=X, expand=True, pady=(5, 0), ipady=5)
+            else:
+                self.view.external_process_frame.pack_forget()
+        except tk.TclError:
+            pass
+            
+    def stop_external_bridge(self) -> None:
+        """Stops the detected external ks_bridge process."""
+        if not self.external_process_pid:
+            return
+            
+        if not messagebox.askyesno(
+            translate("Confirm Stop"),
+            translate("Are you sure you want to stop the external ks_bridge process (PID: {})?").format(self.external_process_pid)
+        ):
+            return
+            
+        try:
+            proc = psutil.Process(self.external_process_pid)
+            proc.terminate()
+            self.log_message(f"Terminated external process {self.external_process_pid}.")
+            ToastNotification(
+                title=translate("Success"),
+                message=translate("External process terminated."),
+                bootstyle=SUCCESS,
+            ).show_toast()
+        except psutil.NoSuchProcess:
+            self.log_message(f"External process {self.external_process_pid} already stopped.")
+        except Exception as e:
+            self.log_message(f"Failed to stop external process: {e}")
+            messagebox.showerror(translate("Error"), str(e))
+            
+        self.view.after(500, self._check_for_external_process)
 
     def _delete_bridge_files(self) -> None:
         """Delete the bridge exe, config, and version files."""
@@ -1257,7 +1380,7 @@ class BridgeInstanceController:
         if not hasattr(self.view, "start_button"):
             return
         
-        is_running: bool = self.bridge_process and self.bridge_process.poll() is None
+        is_running: bool = bool(self.bridge_process and self.bridge_process.poll() is None)
 
         try:
             self.view.start_button.config(
@@ -1267,14 +1390,71 @@ class BridgeInstanceController:
                 state="normal" if (is_running and active) else "disabled"
             )
             
+            try:
+                new_command: str = self.view.command_preview_text.text.get("1.0", "end-1c").strip()
+                if is_running and active and new_command != self.running_command_str:
+                    self.view.apply_restart_button.config(state="normal")
+                else:
+                    self.view.apply_restart_button.config(state="disabled")
+            except tk.TclError:
+                self.view.apply_restart_button.config(state="disabled")
+
             self._update_update_button_logic(active)
             
-            self.view.reset_button.config(state="normal" if active else "disabled")
-            self.view.delete_files_button.config(
-                state="normal" if active and not is_running else "disabled"
+            self.view.reset_button.config(
+                state="normal" if (active and not is_running) else "disabled"
             )
+            self.view.delete_files_button.config(
+                state="normal" if (active and not is_running) else "disabled"
+            )
+            
+            custom_path_state = "disabled" if (is_running or not active) else "normal"
+            self.view.exe_cb.config(state=custom_path_state)
+            self.view.config_cb.config(state=custom_path_state)
+            self.view.url_cb.config(state=custom_path_state)
+
+            if not is_running and active:
+                self._toggle_entry_state(
+                    self.use_custom_exe_var, [self.view.exe_entry, self.view.exe_browse]
+                )
+                self._toggle_entry_state(
+                    self.use_custom_config_var,
+                    [self.view.config_entry, self.view.config_browse],
+                )
+                custom_url_widgets: List[tk.Widget] = [
+                    self.view.url_entry,
+                    self.view.url_exe_path_label,
+                    self.view.url_exe_path_entry,
+                    self.view.url_config_path_label,
+                    self.view.url_config_path_entry,
+                ]
+                self._toggle_entry_state(self.use_custom_url_var, custom_url_widgets)
+            else:
+                self.view.toggle_entry_state(ttk.BooleanVar(value=False), [self.view.exe_entry, self.view.exe_browse])
+                self.view.toggle_entry_state(ttk.BooleanVar(value=False), [self.view.config_entry, self.view.config_browse])
+                custom_url_widgets: List[tk.Widget] = [
+                    self.view.url_entry,
+                    self.view.url_exe_path_label,
+                    self.view.url_exe_path_entry,
+                    self.view.url_config_path_label,
+                    self.view.url_config_path_entry,
+                ]
+                self.view.toggle_entry_state(ttk.BooleanVar(value=False), custom_url_widgets)
+            
         except tk.TclError:
             pass
+
+    def _toggle_entry_state(
+        self, enabled_var: ttk.BooleanVar, entries: List[tk.Widget]
+    ) -> None:
+        """Enable or disable a list of widgets based on a BooleanVar."""
+        new_state: str = "normal" if enabled_var.get() else "disabled"
+        for entry in entries:
+            try:
+                if entry.winfo_exists():
+                    entry.config(state=new_state)
+            except tk.TclError:
+                pass
 
     def re_translate(self) -> None:
         """Update all translatable strings in the UI."""
