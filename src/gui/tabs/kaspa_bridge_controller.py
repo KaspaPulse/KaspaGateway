@@ -16,7 +16,7 @@ import subprocess
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox
-from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING, cast
+from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING, cast, Set
 
 import psutil
 import ttkbootstrap as ttk
@@ -164,8 +164,8 @@ class BridgeInstanceController:
             and self.custom_config_path_var.get()
         ):
             self.config_yaml_path = self.custom_config_path_var.get()
-
-        # Do not call update_command_preview() here; wait for view to build.
+        
+        # Defer update_command_preview() until after the view is built
 
     def _bool_to_str(self, b_val: bool) -> str:
         """Converts a boolean to its string representation."""
@@ -809,7 +809,7 @@ class BridgeInstanceController:
                         local_version_text = f"{translate('Local Version')}: {version}"
                 except Exception as e:
                     logger.error(
-                        "Failed to read local bridge version file: "
+                        f"Failed to read local bridge version file: "
                         f"{_sanitize_for_logging(e)}"
                     )
                     local_version_text = (
@@ -846,7 +846,7 @@ class BridgeInstanceController:
         try:
             if not self.view.winfo_exists():
                 return
-                
+            
             self.update_command_preview()
             self._update_update_button_logic()
 
@@ -1210,14 +1210,25 @@ class BridgeInstanceController:
             self.log_message(f"{translate('Bridge is not running.')}")
 
     def _check_for_external_process(self) -> None:
-        """Scans for external ks_bridge processes."""
+        """Scans for external ks_bridge processes, ignoring other managed instances."""
         self.external_process_pid = None
         my_pid: Optional[int] = self.bridge_process.pid if self.bridge_process else None
         
+        managed_pids: Set[Optional[int]] = {my_pid}
+        if self.main_bridge_tab:
+            if (self.main_bridge_tab.bridge1_tab_instance and 
+                self.main_bridge_tab.bridge1_tab_instance.controller.bridge_process):
+                managed_pids.add(self.main_bridge_tab.bridge1_tab_instance.controller.bridge_process.pid)
+            
+            if (self.main_bridge_tab.bridge2_tab_instance and 
+                self.main_bridge_tab.bridge2_tab_instance.controller.bridge_process):
+                managed_pids.add(self.main_bridge_tab.bridge2_tab_instance.controller.bridge_process.pid)
+        
         try:
             for proc in psutil.process_iter(['pid', 'name']):
-                if proc.name().lower() == "ks_bridge.exe" and proc.pid != my_pid:
+                if proc.name().lower() == "ks_bridge.exe" and proc.pid not in managed_pids:
                     self.external_process_pid = proc.pid
+                    logger.warning(f"Found external ks_bridge.exe (PID: {proc.pid}). Managed PIDs: {managed_pids}")
                     break
         except Exception as e:
             logger.warning(f"Failed to scan for external processes: {e}")
