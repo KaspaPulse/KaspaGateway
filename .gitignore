@@ -1,0 +1,69 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+#  Usually 'dist' would cover this
+*.spec
+
+# PyInstaller Windows specific
+# Uncomment if you need to keep build/ in version control
+# build/
+
+# Installer files
+/dist/*.exe
+/dist/*.msi
+
+# Cache files
+.cache/
+.pytest_cache/
+.mypy_cache/
+.tox/
+.nox/
+
+# Virtual environment
+.venv/
+venv/
+ENV/
+
+# DB files
+user_data/
+*.db
+*.duckdb
+*.duckdb.wal
+*.lock
+
+# Log files
+*.log
+logs/
+
+# IDE settings
+.idea/
+.vscode/
+
+# OS-generated files
+.DS_Store
+Thumbs.db
