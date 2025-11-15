@@ -1,29 +1,35 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 """
 Contains the GUI tab (View) for managing a local Kaspa node (kaspad).
 This file should only contain widget creation and layout logic.
 All logic and state is managed by KaspaNodeController.
 """
 
+from __future__ import annotations
 import re
+import logging
 import tkinter as tk
 from typing import TYPE_CHECKING, Any, Dict, List, Tuple, Optional
 
 import ttkbootstrap as ttk
-from ttkbootstrap.constants import *
+from ttkbootstrap.constants import (
+    BOTH, END, EW, HORIZONTAL, LEFT, NORMAL, DISABLED,
+    NSEW, RIGHT, TOP, VERTICAL, W, WORD, X,
+    SUCCESS, DANGER, INFO
+)
 from ttkbootstrap.scrolled import ScrolledFrame, ScrolledText
+from ttkbootstrap.toast import ToastNotification
 from ttkbootstrap.tooltip import ToolTip
 
 from src.utils.i18n import translate
-
 from .kaspa_node_controller import KaspaNodeController
 
 if TYPE_CHECKING:
     from src.gui.main_window import MainWindow
     from src.gui.config_manager import ConfigManager
 
+logger = logging.getLogger(__name__)
 
 class KaspaNodeTab(ttk.Frame):
     """
@@ -78,17 +84,21 @@ class KaspaNodeTab(ttk.Frame):
     output_text: ScrolledText
     log_font_label: ttk.Label
     log_font_spinbox: ttk.Spinbox
+    clear_log_button: ttk.Button
+    copy_log_button: ttk.Button
+    log_autoscroll_var: ttk.BooleanVar
+    log_autoscroll_cb: ttk.Checkbutton
     # --- End Type Hint Declarations ---
 
     def __init__(
         self,
-        master: ttk.Frame,
+        master: ttk.Notebook,
         main_window: "MainWindow",
         config_manager: "ConfigManager",
         **kwargs: Any,
     ) -> None:
         super().__init__(master, **kwargs)
-        self.pack(fill="both", expand=True)
+        self.pack(fill=BOTH, expand=True)
 
         self.controller = KaspaNodeController(self, main_window, config_manager)
 
@@ -96,19 +106,21 @@ class KaspaNodeTab(ttk.Frame):
         self.controller.controller_load_settings()
 
         self.notebook = ttk.Notebook(self)
-        self.notebook.pack(fill="both", expand=True, padx=10, pady=10)
+        self.notebook.pack(fill=BOTH, expand=True, padx=10, pady=10)
 
         self.settings_tab_frame = ttk.Frame(self.notebook, padding=0)
         self.log_tab_frame = ttk.Frame(self.notebook, padding=0)
+        self.log_tab_frame.grid_rowconfigure(0, weight=1)
+        self.log_tab_frame.grid_columnconfigure(0, weight=1)
 
         self.notebook.add(self.settings_tab_frame, text=translate("Settings"))
         self.notebook.add(self.log_tab_frame, text=translate("Log"))
 
         self.settings_pane = self.create_settings_pane(self.settings_tab_frame)
-        self.settings_pane.pack(fill="both", expand=True)
+        self.settings_pane.pack(fill=BOTH, expand=True)
 
         self.log_pane = self.create_log_pane(self.log_tab_frame)
-        # self.log_pane is packed inside create_log_pane itself
+        self.log_pane.grid(row=0, column=0, sticky="nsew", padx=10, pady=(0, 10))
 
         self.controller._add_tracers()
         self.controller._update_all_entry_states()
@@ -292,8 +304,7 @@ class KaspaNodeTab(ttk.Frame):
         """
         option_vars_tuple = self.controller.option_vars.get(key)
         if not option_vars_tuple:
-            logger.warning(f"Key {key} not found in controller.option_vars")
-            return ttk.Frame(master)
+            return ttk.Frame(master)  # Return empty frame on error
 
         check_var = option_vars_tuple[0]
         val1_var = option_vars_tuple[1] if len(option_vars_tuple) > 1 else None
@@ -330,6 +341,7 @@ class KaspaNodeTab(ttk.Frame):
             ip_entry.pack(side=RIGHT, fill="x", expand=True, padx=(0, 2))
 
             widget_list.extend([ip_entry, colon_label, port_entry])
+            # Store widgets in the controller's tuple for re_translate
             self.controller.option_vars[key] = (
                 check_var, val1_var, val2_var, *widget_list
             )
@@ -362,6 +374,7 @@ class KaspaNodeTab(ttk.Frame):
         )
         cb.pack(side="left")
         ToolTip(cb, text=translate(f"Tooltip_{key}"), wraplength=300)
+        # Store widgets in the controller's tuple for re_translate
         self.controller.option_vars[key] = (check_var, None, frame, cb)
 
         return frame
@@ -499,7 +512,7 @@ class KaspaNodeTab(ttk.Frame):
             self.external_process_frame,
             text=translate("Stop External Process"),
             command=self.controller.stop_external_node,
-            bootstyle="danger",
+            bootstyle=DANGER,
         )
         self.external_process_stop_button.grid(row=1, column=0, columnspan=2, sticky="ew", padx=5)
         
@@ -555,9 +568,8 @@ class KaspaNodeTab(ttk.Frame):
 
         netsuffix_vars = self.controller.option_vars.get("netsuffix")
         if not netsuffix_vars:
-             logger.error("Failed to find 'netsuffix' in option_vars")
              return self.network_frame
-            
+        
         check_var, string_var, *_ = netsuffix_vars
 
         self.netsuffix_frame = ttk.Frame(self.network_frame)
@@ -577,7 +589,6 @@ class KaspaNodeTab(ttk.Frame):
         ToolTip(label, text=translate("Tooltip_netsuffix"), wraplength=300)
         
         if not isinstance(string_var, ttk.StringVar):
-             logger.error("netsuffix string_var is not a StringVar")
              return self.network_frame
 
         entry = ttk.Entry(self.netsuffix_frame, textvariable=string_var, state="disabled")
@@ -655,13 +666,6 @@ class KaspaNodeTab(ttk.Frame):
         )
         self.url_path_entry.pack(fill=X, expand=True)
 
-        self.controller.use_custom_exe_var.trace_add(
-            "write", self.controller._on_custom_exe_toggled
-        )
-        self.controller.use_custom_url_var.trace_add(
-            "write", self.controller._on_custom_url_toggled
-        )
-
         self.controller._toggle_entry_state(
             self.controller.use_custom_exe_var, [self.exe_entry, self.exe_browse]
         )
@@ -672,28 +676,70 @@ class KaspaNodeTab(ttk.Frame):
 
         return self.custom_paths_frame
 
+    def _clear_log(self) -> None:
+        """Clears the log text widget."""
+        try:
+            if self.output_text.winfo_exists():
+                self.output_text.text.config(state="normal")
+                self.output_text.text.delete('1.0', END)
+                self.output_text.text.config(state="disabled")
+        except tk.TclError:
+            pass
+
+    def _copy_log_to_clipboard(self) -> None:
+        """Copies the entire content of the log text widget to the clipboard."""
+        try:
+            content: str = self.output_text.text.get("1.0", END)
+            self.controller.main_window.clipboard_clear()
+            self.controller.main_window.clipboard_append(content)
+            ToastNotification(
+                title=translate("Success"),
+                message=translate("Log content copied to clipboard."),
+                bootstyle=SUCCESS,
+                duration=3000
+            ).show_toast()
+        except Exception as e:
+            logger.error(f"Failed to copy node log to clipboard: {e}")
+            ToastNotification(
+                title=translate("Error"),
+                message=str(e),
+                bootstyle=DANGER,
+                duration=3000
+            ).show_toast()
+
     def _update_log_font(self, *args: Any) -> None:
-        """Update the font size in the log window."""
-        if hasattr(self, "output_text"):
-            try:
-                size = self.controller.log_font_size_var.get()
-                self.output_text.text.config(font=("Courier New", size))
-                self.output_text.text.tag_configure("error", font=f"Courier {size} bold")
-                self.output_text.text.tag_configure(
-                    "separator", font=f"Courier {size} bold"
-                )
-                if hasattr(self.controller, "config_manager"):
-                    self.controller._save_settings()
-            except tk.TclError:
-                pass
+        """Update the font size in the log window and all configured tags."""
+        if not hasattr(self, "output_text"):
+            return
+            
+        try:
+            size = self.controller.log_font_size_var.get()
+            font_name = "Courier New"
+            font_bold = (font_name, size, "bold")
+            font_normal = (font_name, size)
+
+            self.output_text.text.config(font=font_normal)
+            
+            style = self.controller.main_window.style
+            
+            self.output_text.text.tag_configure("info", font=font_normal)
+            self.output_text.text.tag_configure("warning", font=font_normal)
+            self.output_text.text.tag_configure("error", font=font_bold)
+            self.output_text.text.tag_configure("debug", font=font_normal)
+            self.output_text.text.tag_configure("trace", font=font_normal)
+            self.output_text.text.tag_configure("timestamp", font=font_normal)
+            self.output_text.text.tag_configure("separator", font=font_bold)
+
+            if hasattr(self.controller, "config_manager"):
+                self.controller._save_settings()
+        except (tk.TclError, AttributeError):
+            pass
 
     def create_log_pane(self, master: ttk.Frame) -> ttk.Labelframe:
         """Create the 'Live Log' panel."""
         self.log_pane = ttk.Labelframe(
             master, text=translate("Live Log"), padding=10
         )
-        self.log_pane.pack(fill=BOTH, expand=True, padx=0, pady=0) 
-        
         self.log_pane.grid_rowconfigure(1, weight=1)
         self.log_pane.grid_columnconfigure(0, weight=1)
 
@@ -715,6 +761,31 @@ class KaspaNodeTab(ttk.Frame):
         )
         self.log_font_spinbox.pack(side=LEFT)
 
+        self.clear_log_button = ttk.Button(
+            control_frame,
+            text=translate("Clear Log"),
+            command=self._clear_log,
+            bootstyle="info-outline"
+        )
+        self.clear_log_button.pack(side=LEFT, padx=(10, 5))
+
+        self.copy_log_button = ttk.Button(
+            control_frame,
+            text=translate("Copy Log"),
+            command=self._copy_log_to_clipboard,
+            bootstyle="info-outline"
+        )
+        self.copy_log_button.pack(side=LEFT, padx=(0, 5))
+
+        self.log_autoscroll_var = ttk.BooleanVar(value=True)
+        self.log_autoscroll_cb = ttk.Checkbutton(
+            control_frame,
+            text=translate("Auto-Scroll"),
+            variable=self.log_autoscroll_var,
+            bootstyle="round-toggle"
+        )
+        self.log_autoscroll_cb.pack(side=RIGHT, padx=5)
+
         self.output_text = ScrolledText(
             self.log_pane, wrap="word", height=20, autohide=True, bootstyle="dark"
         )
@@ -722,31 +793,30 @@ class KaspaNodeTab(ttk.Frame):
 
         style = self.controller.main_window.style
         font_size = self.controller.log_font_size_var.get()
+        font_name = "Courier New"
+        font_bold = (font_name, font_size, "bold")
+        font_normal = (font_name, font_size)
 
         try:
-            self.output_text.text.tag_configure("info", foreground=style.colors.info)
-            self.output_text.text.tag_configure(
-                "warning", foreground=style.colors.warning
-            )
+            self.output_text.text.tag_configure("info", foreground=style.colors.info, font=font_normal)
+            self.output_text.text.tag_configure("warning", foreground=style.colors.warning, font=font_normal)
             self.output_text.text.tag_configure(
                 "error",
                 foreground=style.colors.danger,
-                font=f"Courier {font_size} bold",
+                font=font_bold,
             )
             self.output_text.text.tag_configure(
-                "debug", foreground=style.colors.secondary
+                "debug", foreground=style.colors.secondary, font=font_normal
+            )
+            self.output_text.text.tag_configure("trace", foreground="#6610F2", font=font_normal)
+            self.output_text.text.tag_configure("timestamp", foreground="#ADB5BD", font=font_normal)
+            self.output_text.text.tag_configure(
+                "separator", foreground="#28A745", font=font_bold
             )
         except Exception:
             pass
-        self.output_text.text.tag_configure("trace", foreground="#6610F2")
-        self.output_text.text.tag_configure("timestamp", foreground="#ADB5BD")
-        self.output_text.text.tag_configure(
-            "separator", foreground="#28A745", font=f"Courier {font_size} bold"
-        )
 
-        self.output_text.text.config(state="disabled")
-        self._update_log_font()
-
+        self.output_text.text.config(state="disabled", font=font_normal)
         return self.log_pane
 
     def _insert_output(self, text_line: str) -> None:
@@ -784,9 +854,16 @@ class KaspaNodeTab(ttk.Frame):
                 ts_start = f"{start_index}+{timestamp_match.start()}c"
                 ts_end = f"{start_index}+{timestamp_match.end()}c"
                 self.output_text.text.tag_add("timestamp", ts_start, ts_end)
+            
+            # Line Limiting
+            num_lines = int(self.output_text.text.index("end-1c").split('.')[0])
+            if num_lines > 2000:  # Keep the last 2000 lines
+                self.output_text.text.delete("1.0", f"{num_lines - 2000}.0")
 
-            self.output_text.text.see("end")
+            if self.log_autoscroll_var.get():
+                self.output_text.text.see("end")
             self.output_text.text.config(state="disabled")
+
         except tk.TclError:
             pass
 
@@ -796,6 +873,9 @@ class KaspaNodeTab(ttk.Frame):
         self.notebook.tab(1, text=translate("Log"))
 
         self.log_pane.config(text=translate("Live Log"))
+        self.clear_log_button.config(text=translate("Clear Log"))
+        self.copy_log_button.config(text=translate("Copy Log"))
+        self.log_autoscroll_cb.config(text=translate("Auto-Scroll"))
 
         self.controls_frame.config(text=translate("Controls"))
         self.start_button.config(text=translate("Start Kaspa Node"))
@@ -841,20 +921,23 @@ class KaspaNodeTab(ttk.Frame):
             self.col3_label.config(text=translate("DB & Performance"))
 
         for key, item_tuple in self.controller.option_vars.items():
-            if len(item_tuple) > 2 and isinstance(item_tuple[2], ttk.Frame):
+            if len(item_tuple) > 2:
                 label_text_key = f"Tooltip_{key}"
                 label_widget: Optional[ttk.Label] = None
                 cb_widget: Optional[ttk.Checkbutton] = None
 
-                if item_tuple[1] is not None:
-                    if len(item_tuple) > 3 and isinstance(item_tuple[3], ttk.Label):
-                        label_widget = item_tuple[3]
-                        if item_tuple[2].winfo_children():
-                            cb_widget = item_tuple[2].winfo_children()[0]
-                else:
-                    if len(item_tuple) > 3 and isinstance(item_tuple[3], ttk.Checkbutton):
-                        cb_widget = item_tuple[3]
-                
+                try:
+                    if item_tuple[1] is not None:
+                        if len(item_tuple) > 3 and isinstance(item_tuple[3], ttk.Label):
+                            label_widget = item_tuple[3]
+                            if item_tuple[2].winfo_children():
+                                cb_widget = item_tuple[2].winfo_children()[0]
+                    else:
+                        if len(item_tuple) > 3 and isinstance(item_tuple[3], ttk.Checkbutton):
+                            cb_widget = item_tuple[3]
+                except (IndexError, AttributeError):
+                    continue
+
                 if label_widget:
                     label_widget.config(text=f"--{key}")
                     ToolTip(label_widget, text=translate(label_text_key), wraplength=300)

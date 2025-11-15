@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 """
 Contains the Controller (logic and state) for the KaspaNodeTab (View).
 This file handles all business logic, state management, and subprocess
@@ -585,6 +584,7 @@ class KaspaNodeController:
         """
         Updates the Update/Download button text AND state.
         """
+
         if not hasattr(self.view, "update_button"):
             return
 
@@ -1138,7 +1138,8 @@ class KaspaNodeController:
         try:
             if self.view.winfo_exists():
                 self.view.after(0, self.set_controls_state, True)
-                self.view.after(100, self._check_for_external_process)
+                # Do not check for external processes immediately after stopping.
+                # self.view.after(100, self._check_for_external_process)
         except (tk.TclError, RuntimeError):
             pass
             
@@ -1400,7 +1401,6 @@ class KaspaNodeController:
             except tk.TclError:
                  self.view.apply_restart_button.config(state="disabled")
 
-
             self._update_update_button_logic(is_active)
 
             self.view.reset_button.config(
@@ -1509,7 +1509,6 @@ class KaspaNodeController:
                 "netsuffix", (ttk.BooleanVar(value=False), ttk.StringVar(value=""))
             )
             netsuffix_check, netsuffix_val = netsuffix_vars[0], netsuffix_vars[1]
-
 
             if netsuffix_check.get() and network_name == "testnet" and isinstance(netsuffix_val, ttk.StringVar):
                 net_suffix: str = netsuffix_val.get()

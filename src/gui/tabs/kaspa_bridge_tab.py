@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 """
 Contains the GUI View classes for the Kaspa Bridge tab.
 - BridgeInstanceTab: The View for a single bridge instance.
@@ -15,7 +14,10 @@ from tkinter import END, filedialog, messagebox
 from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 import ttkbootstrap as ttk
-from ttkbootstrap.constants import DANGER, DISABLED, INFO, LEFT, SUCCESS, TOP, X, EW, W, NSEW
+from ttkbootstrap.constants import (
+    BOTH, CENTER, DANGER, DISABLED, END, EW, HORIZONTAL, INFO, LEFT,
+    NORMAL, NSEW, RIGHT, SOLID, SUCCESS, TOP, W, WORD, X
+)
 from ttkbootstrap.scrolled import ScrolledFrame, ScrolledText
 from ttkbootstrap.toast import ToastNotification
 from ttkbootstrap.tooltip import ToolTip
@@ -65,6 +67,7 @@ class BridgeInstanceTab(ttk.Frame):
     latest_version_label: ttk.Label
     latest_date_label: ttk.Label
     enable_bridge_2_cb: ttk.Checkbutton
+
     main_settings_frame: ttk.Labelframe
     difficulty_frame: ttk.Labelframe
     logging_frame: ttk.Labelframe
@@ -85,11 +88,15 @@ class BridgeInstanceTab(ttk.Frame):
     output_text: ScrolledText
     log_font_label: ttk.Label
     log_font_spinbox: ttk.Spinbox
+    clear_log_button: ttk.Button
+    copy_log_button: ttk.Button
+    log_autoscroll_var: ttk.BooleanVar
+    log_autoscroll_cb: ttk.Checkbutton
     # --- End Type Hint Declarations ---
 
     def __init__(
         self,
-        master: ttk.Frame,
+        master: ttk.Notebook,
         main_window: "MainWindow",
         config_manager: "ConfigManager",
         instance_id: str,
@@ -102,6 +109,7 @@ class BridgeInstanceTab(ttk.Frame):
         super().__init__(master, **kwargs)
 
         self.main_window = main_window
+        self.log_autoscroll_var = ttk.BooleanVar(value=True)
 
         # Create the Controller
         self.controller = BridgeInstanceController(
@@ -110,7 +118,7 @@ class BridgeInstanceTab(ttk.Frame):
 
         # Build the UI
         self.notebook = ttk.Notebook(self)
-        self.notebook.pack(fill="both", expand=True, padx=0, pady=0)
+        self.notebook.pack(fill=BOTH, expand=True, padx=0, pady=0)
 
         self.settings_tab_frame = ttk.Frame(self.notebook, padding=0)
         self.settings_tab_frame.grid_rowconfigure(0, weight=1)
@@ -124,13 +132,13 @@ class BridgeInstanceTab(ttk.Frame):
         self.notebook.add(self.log_tab_frame, text=translate("Log"))
 
         settings_scrolled_frame = ScrolledFrame(self.settings_tab_frame, autohide=True)
-        settings_scrolled_frame.grid(row=0, column=0, sticky="nsew")
+        settings_scrolled_frame.grid(row=0, column=0, sticky=NSEW)
 
         self.settings_pane = self.create_settings_pane(settings_scrolled_frame.container)
-        self.settings_pane.pack(fill="both", expand=True)
+        self.settings_pane.pack(fill=BOTH, expand=True)
 
         self.log_pane = self.create_log_pane(self.log_tab_frame)
-        self.log_pane.grid(row=0, column=0, sticky="nsew")
+        self.log_pane.pack(fill=BOTH, expand=True, padx=10, pady=(0, 10))
 
         # Add tracers and update preview (which was deferred from controller init)
         self.controller._add_tracers()
@@ -147,7 +155,7 @@ class BridgeInstanceTab(ttk.Frame):
         self.preview_lf = ttk.Labelframe(
             settings_outer_frame, text=translate("Command Preview"), padding=10
         )
-        self.preview_lf.grid(row=0, column=0, sticky="nsew", padx=5, pady=(0, 10))
+        self.preview_lf.grid(row=0, column=0, sticky=NSEW, padx=5, pady=(0, 10))
         self.preview_lf.grid_columnconfigure(0, weight=1)
 
         self.command_preview_text = ScrolledText(
@@ -158,7 +166,7 @@ class BridgeInstanceTab(ttk.Frame):
             autohide=True,
             bootstyle="round",
         )
-        self.command_preview_text.grid(row=0, column=0, sticky="ew")
+        self.command_preview_text.grid(row=0, column=0, sticky=EW)
         self.command_preview_text.text.config(state="normal")
         self.command_preview_text.text.bind(
             "<KeyRelease>", self.controller.on_manual_command_edit
@@ -174,25 +182,25 @@ class BridgeInstanceTab(ttk.Frame):
 
         # Options Frame
         options_frame = ttk.Frame(settings_outer_frame)
-        options_frame.grid(row=1, column=0, sticky="nsew")
+        options_frame.grid(row=1, column=0, sticky=NSEW)
 
         options_frame.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="group1")
         options_frame.grid_rowconfigure(0, weight=1)
 
         col1_frame = ttk.Frame(options_frame)
-        col1_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
+        col1_frame.grid(row=0, column=0, sticky=NSEW, padx=(0, 5))
         col1_frame.grid_columnconfigure(0, weight=1)
 
         col2_frame = ttk.Frame(options_frame)
-        col2_frame.grid(row=0, column=1, sticky="nsew", padx=5)
+        col2_frame.grid(row=0, column=1, sticky=NSEW, padx=5)
         col2_frame.grid_columnconfigure(0, weight=1)
 
         col3_frame = ttk.Frame(options_frame)
-        col3_frame.grid(row=0, column=2, sticky="nsew", padx=5)
+        col3_frame.grid(row=0, column=2, sticky=NSEW, padx=5)
         col3_frame.grid_columnconfigure(0, weight=1)
 
         col4_frame = ttk.Frame(options_frame)
-        col4_frame.grid(row=0, column=3, sticky="nsew", padx=(5, 0))
+        col4_frame.grid(row=0, column=3, sticky=NSEW, padx=(5, 0))
         col4_frame.grid_columnconfigure(0, weight=1)
 
         self.create_controls_frame(col1_frame).grid(
@@ -293,7 +301,6 @@ class BridgeInstanceTab(ttk.Frame):
             bootstyle="danger-outline",
         )
         self.delete_files_button.grid(row=2, column=1, sticky=EW, padx=(2, 0), pady=(2, 0))
-
 
         self.autostart_cb = ttk.Checkbutton(
             self.controls_frame,
@@ -721,19 +728,73 @@ class BridgeInstanceTab(ttk.Frame):
 
         return self.custom_paths_frame
 
+    def _clear_log(self) -> None:
+        """Clears the log text widget."""
+        try:
+            if self.output_text.winfo_exists():
+                self.output_text.text.config(state="normal")
+                self.output_text.text.delete('1.0', END)
+                self.output_text.text.config(state="disabled")
+        except tk.TclError:
+            pass
+
+    def _copy_log_to_clipboard(self) -> None:
+        """Copies the entire content of the log text widget to the clipboard."""
+        try:
+            content: str = self.output_text.text.get("1.0", END)
+            self.main_window.clipboard_clear()
+            self.main_window.clipboard_append(content)
+            ToastNotification(
+                title=translate("Success"),
+                message=translate("Log content copied to clipboard."),
+                bootstyle=SUCCESS,
+                duration=3000
+            ).show_toast()
+        except Exception as e:
+            logger.error(f"Failed to copy bridge log to clipboard: {e}")
+            ToastNotification(
+                title=translate("Error"),
+                message=str(e),
+                bootstyle=DANGER,
+                duration=3000
+            ).show_toast()
+
     def update_log_font(self, size: int) -> None:
-        """Update the font size in the log window."""
-        if hasattr(self, "output_text"):
-            try:
-                self.output_text.text.config(font=("Courier New", size))
-                self.output_text.text.tag_configure(
-                    "error", font=f"Courier {size} bold"
-                )
-                self.output_text.text.tag_configure(
-                    "separator", font=f"Courier {size} bold"
-                )
-            except tk.TclError:
-                pass
+        """Update the font size in the log window and all configured tags."""
+        if not hasattr(self, "output_text"):
+            return
+            
+        try:
+            font_name = "Courier New"
+            font_bold = (font_name, size, "bold")
+            font_normal = (font_name, size)
+
+            self.output_text.text.config(font=font_normal)
+            
+            style = self.main_window.style
+            
+            self.output_text.text.tag_configure("info", foreground=style.colors.info, font=font_normal)
+            self.output_text.text.tag_configure("warning", foreground=style.colors.warning, font=font_normal)
+            self.output_text.text.tag_configure(
+                "error",
+                foreground=style.colors.danger,
+                font=font_bold,
+            )
+            self.output_text.text.tag_configure(
+                "debug", foreground=style.colors.secondary, font=font_normal
+            )
+            self.output_text.text.tag_configure("trace", foreground="#6610F2", font=font_normal)
+            self.output_text.text.tag_configure("timestamp", foreground="#ADB5BD", font=font_normal)
+            self.output_text.text.tag_configure(
+                "separator",
+                foreground=style.colors.success,
+                font=font_bold,
+            )
+            self.output_text.text.tag_configure("message", foreground="#ABEBC6", font=font_normal)
+            self.output_text.text.tag_configure("key", foreground="#5DADE2", font=font_normal)
+            self.output_text.text.tag_configure("value", foreground="#FAD7A0", font=font_normal)
+        except (tk.TclError, AttributeError):
+            pass
 
     def create_log_pane(self, master: ttk.Frame) -> ttk.Labelframe:
         """Create the 'Live Log' panel."""
@@ -744,7 +805,7 @@ class BridgeInstanceTab(ttk.Frame):
         self.log_pane.grid_columnconfigure(0, weight=1)
 
         control_frame = ttk.Frame(self.log_pane)
-        control_frame.grid(row=0, column=0, sticky="ew", pady=(0, 5))
+        control_frame.grid(row=0, column=0, sticky=EW, pady=(0, 5))
 
         self.log_font_label = ttk.Label(
             control_frame, text=f"{translate('Font Size')}:"
@@ -761,41 +822,39 @@ class BridgeInstanceTab(ttk.Frame):
         )
         self.log_font_spinbox.pack(side=LEFT)
 
+        self.clear_log_button = ttk.Button(
+            control_frame,
+            text=translate("Clear Log"),
+            command=self._clear_log,
+            bootstyle="info-outline"
+        )
+        self.clear_log_button.pack(side=LEFT, padx=(10, 5))
+
+        self.copy_log_button = ttk.Button(
+            control_frame,
+            text=translate("Copy Log"),
+            command=self._copy_log_to_clipboard,
+            bootstyle="info-outline"
+        )
+        self.copy_log_button.pack(side=LEFT, padx=(0, 5))
+
+        self.log_autoscroll_cb = ttk.Checkbutton(
+            control_frame,
+            text=translate("Auto-Scroll"),
+            variable=self.log_autoscroll_var,
+            bootstyle="round-toggle"
+        )
+        self.log_autoscroll_cb.pack(side=RIGHT, padx=5)
+
         self.output_text = ScrolledText(
             self.log_pane, wrap="word", autohide=True, bootstyle="dark"
         )
-        self.output_text.grid(row=1, column=0, sticky="nsew")
+        self.output_text.grid(row=1, column=0, sticky=NSEW)
 
-        try:
-            style = self.main_window.style
-            font_size: int = self.controller.log_font_size_var.get()
-            self.output_text.text.tag_configure("info", foreground=style.colors.info)
-            self.output_text.text.tag_configure(
-                "warning", foreground=style.colors.warning
-            )
-            self.output_text.text.tag_configure(
-                "error",
-                foreground=style.colors.danger,
-                font=f"Courier {font_size} bold",
-            )
-            self.output_text.text.tag_configure(
-                "debug", foreground=style.colors.secondary
-            )
-            self.output_text.text.tag_configure("trace", foreground="#6610F2")
-            self.output_text.text.tag_configure("timestamp", foreground="#ADB5BD")
-            self.output_text.text.tag_configure(
-                "separator",
-                foreground=style.colors.success,
-                font=f"Courier {font_size} bold",
-            )
-            self.output_text.text.tag_configure("message", foreground="#ABEBC6")
-            self.output_text.text.tag_configure("key", foreground="#5DADE2")
-            self.output_text.text.tag_configure("value", foreground="#FAD7A0")
-        except Exception:
-            logger.warning("Could not apply all log color styles.")
-
-        self.output_text.text.config(state="disabled")
+        # Apply font fix to all tags
         self.update_log_font(self.controller.log_font_size_var.get())
+        
+        self.output_text.text.config(state="disabled")
         return self.log_pane
 
     def _insert_output(self, text_line: str) -> None:
@@ -860,7 +919,13 @@ class BridgeInstanceTab(ttk.Frame):
                 val_end = f"{start_index}+{val_end_idx}c"
                 self.output_text.text.tag_add("value", val_start, val_end)
 
-            self.output_text.text.see("end")
+            # Line Limiting
+            num_lines = int(self.output_text.text.index("end-1c").split('.')[0])
+            if num_lines > 2000:  # Keep the last 2000 lines
+                self.output_text.text.delete("1.0", f"{num_lines - 2000}.0")
+
+            if self.log_autoscroll_var.get():
+                self.output_text.text.see("end")
             self.output_text.text.config(state="disabled")
         except tk.TclError:
             pass
@@ -871,6 +936,9 @@ class BridgeInstanceTab(ttk.Frame):
         self.notebook.tab(1, text=translate("Log"))
 
         self.log_pane.config(text=translate("Live Log"))
+        self.clear_log_button.config(text=translate("Clear Log"))
+        self.copy_log_button.config(text=translate("Copy Log"))
+        self.log_autoscroll_cb.config(text=translate("Auto-Scroll"))
         self.controls_frame.config(text=translate("Controls"))
 
         self.start_button.config(text=translate("Start Kaspa Bridge"))
@@ -968,6 +1036,7 @@ class KaspaBridgeTab(ttk.Frame):
     _initial_load_complete: bool
     enable_bridge_2_default: bool
     enable_bridge_2_var: ttk.BooleanVar
+
     notebook: ttk.Notebook
     bridge1_frame: ttk.Frame
     bridge2_frame: ttk.Frame
@@ -984,7 +1053,7 @@ class KaspaBridgeTab(ttk.Frame):
         Initialize the main Kaspa Bridge Tab.
         """
         super().__init__(master, **kwargs)
-        self.pack(fill="both", expand=True, padx=0, pady=0)
+        self.pack(fill=BOTH, expand=True, padx=0, pady=0)
 
         self.main_window = main_window
         self.config_manager = config_manager
@@ -997,7 +1066,7 @@ class KaspaBridgeTab(ttk.Frame):
         self._load_main_settings()
 
         self.notebook = ttk.Notebook(self)
-        self.notebook.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        self.notebook.pack(fill=BOTH, expand=True, padx=10, pady=(0, 10))
         self.notebook.bind("<<NotebookTabChanged>>", self.on_bridge_sub_tab_changed)
 
         self.enable_bridge_2_var = ttk.BooleanVar(value=self.enable_bridge_2_default)
@@ -1015,7 +1084,7 @@ class KaspaBridgeTab(ttk.Frame):
             instance_id="_1",
             main_bridge_tab=self,
         )
-        self.bridge1_tab_instance.grid(row=0, column=0, sticky="nsew")
+        self.bridge1_tab_instance.grid(row=0, column=0, sticky=NSEW)
         self.notebook.add(self.bridge1_frame, text=translate("Bridge 1"))
 
         # Bridge 2 (Conditional)
@@ -1055,7 +1124,7 @@ class KaspaBridgeTab(ttk.Frame):
                     instance_id="_2",
                     main_bridge_tab=self,
                 )
-                self.bridge2_tab_instance.grid(row=0, column=0, sticky="nsew")
+                self.bridge2_tab_instance.grid(row=0, column=0, sticky=NSEW)
             try:
                 self.notebook.add(self.bridge2_frame, text=translate("Bridge 2"))
             except tk.TclError:
