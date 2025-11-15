@@ -28,6 +28,8 @@ PrivilegesRequired=lowest
 OutputDir=dist
 OutputBaseFilename=KaspaGateway_v1.0.0_Setup
 SetupIconFile=assets\kaspa-white.ico
+; *** FIX: Added this line to show the icon in 'Add or Remove Programs' ***
+UninstallDisplayIcon={app}\KaspaGateway.exe
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern

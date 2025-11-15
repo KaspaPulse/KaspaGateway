@@ -61,7 +61,7 @@ def get_user_data_root(custom_path: Optional[str] = None) -> str:
     %APPDATA%/KaspaGateway folder. This prevents arbitrary file writes
     to other locations on the file system.
     """
-    default_root = os.path.join(os.getenv('APPDATA', ''), APP_NAME)
+    default_root = os.path.join(os.getenv('LOCALAPPDATA', os.getenv('APPDATA', '')), APP_NAME)
     path = default_root
 
     if custom_path:

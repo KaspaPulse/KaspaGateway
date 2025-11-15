@@ -142,7 +142,7 @@ class BridgeInstanceController:
         self.external_process_pid: Optional[int] = None
 
         self.bridge_dir: str = os.path.join(
-            os.getenv("LOCALAPPDATA", CONFIG["paths"]["database"]),
+            os.path.abspath(os.getenv("LOCALAPPDATA", CONFIG["paths"]["database"])),
             "KaspaGateway",
             f"bin_bridge{instance_id}",
         )
@@ -158,12 +158,12 @@ class BridgeInstanceController:
         self._load_settings()
 
         if self.use_custom_exe_var.get() and self.custom_exe_path_var.get():
-            self.bridge_exe_path = self.custom_exe_path_var.get()
+            self.bridge_exe_path = os.path.abspath(self.custom_exe_path_var.get())
         if (
             self.use_custom_config_var.get()
             and self.custom_config_path_var.get()
         ):
-            self.config_yaml_path = self.custom_config_path_var.get()
+            self.config_yaml_path = os.path.abspath(self.custom_config_path_var.get())
         
         # Defer update_command_preview() until after the view is built
 
@@ -484,12 +484,12 @@ class BridgeInstanceController:
     def update_command_preview(self, *args: Any) -> None:
         """Update the command preview text box based on current settings."""
         if self.use_custom_exe_var.get() and self.custom_exe_path_var.get():
-            self.bridge_exe_path = self.custom_exe_path_var.get()
+            self.bridge_exe_path = os.path.abspath(self.custom_exe_path_var.get())
         else:
             self.bridge_exe_path = os.path.join(self.bridge_dir, "ks_bridge.exe")
 
         if self.use_custom_config_var.get() and self.custom_config_path_var.get():
-            self.config_yaml_path = self.custom_config_path_var.get()
+            self.config_yaml_path = os.path.abspath(self.custom_config_path_var.get())
         else:
             self.config_yaml_path = os.path.join(self.bridge_dir, "config.yaml")
 
@@ -583,8 +583,8 @@ class BridgeInstanceController:
         )
         
         if self.use_custom_config_var.get():
-            self.use_custom_exe_var.set(True)  
-            self.use_custom_url_var.set(False) 
+             self.use_custom_exe_var.set(True)  
+             self.use_custom_url_var.set(False) 
         else:
              self.use_custom_exe_var.set(False) 
             
@@ -1002,19 +1002,25 @@ class BridgeInstanceController:
         config_path_to_check: str = ""
 
         try:
-            command_str = self.view.command_preview_text.text.get("1.0", "end-1c").strip()
-            if command_str:
-                command_list = shlex.split(command_str)
+            # Always start with the correct, guaranteed internal path
+            command_list = [self.bridge_exe_path]
+            exe_path_to_check = self.bridge_exe_path
+
+            # Read args only from the text box
+            command_str_from_box = self.view.command_preview_text.text.get("1.0", "end-1c").strip()
             
-            if not command_list:
-                self.log_message("Command preview is empty. Building command from settings...")
-                command_list = self.build_args_from_settings()
-                command_str = " ".join(command_list)
-                if not command_list:
-                     messagebox.showerror(translate("Invalid Input"), "Command is empty.")
-                     return
-            
-            exe_path_to_check = command_list[0]
+            try:
+                # Find the first space to separate the exe path from args
+                first_space_index = command_str_from_box.index(' ')
+                args_str = command_str_from_box[first_space_index:].strip()
+                if args_str:
+                    # Safely parse only the arguments
+                    command_list.extend(shlex.split(args_str))
+            except ValueError:
+                pass # No arguments, just the executable
+
+            # Rebuild the correct command string
+            command_str = " ".join(command_list)
             
             try:
                 config_arg_index = command_list.index("-config")
@@ -1030,7 +1036,7 @@ class BridgeInstanceController:
             if not is_autostart:
                 messagebox.showerror(translate("Invalid Input"), f"Could not parse command: {e}")
             return
-            
+         
         exe_name: str = os.path.basename(exe_path_to_check).lower()
 
         if exe_name in ["cmd.exe", "powershell.exe", "pwsh.exe", "bash.exe", "sh.exe"]:
@@ -1195,7 +1201,7 @@ class BridgeInstanceController:
                 psutil.wait_procs(children, timeout=3)
 
             except psutil.NoSuchProcess:
-                 self.log_message(translate("Bridge is not running."))
+                self.log_message(translate("Bridge is not running."))
             except Exception as e:
                 self.log_message(
                     f"Error while stopping bridge: {_sanitize_for_logging(e)}"
@@ -1390,7 +1396,7 @@ class BridgeInstanceController:
         """Enable or disable all controls in this tab."""
         if not hasattr(self.view, "start_button"):
             return
-        
+
         is_running: bool = bool(self.bridge_process and self.bridge_process.poll() is None)
 
         try:

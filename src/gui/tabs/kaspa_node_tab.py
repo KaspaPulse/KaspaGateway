@@ -113,8 +113,8 @@ class KaspaNodeTab(ttk.Frame):
         self.log_tab_frame.grid_rowconfigure(0, weight=1)
         self.log_tab_frame.grid_columnconfigure(0, weight=1)
 
-        self.notebook.add(self.settings_tab_frame, text=translate("Settings"))
-        self.notebook.add(self.log_tab_frame, text=translate("Log"))
+        self.notebook.add(self.settings_tab_frame, text=f" {translate('Settings')} ")
+        self.notebook.add(self.log_tab_frame, text=f" {translate('Log')} ")
 
         self.settings_pane = self.create_settings_pane(self.settings_tab_frame)
         self.settings_pane.pack(fill=BOTH, expand=True)
@@ -147,7 +147,7 @@ class KaspaNodeTab(ttk.Frame):
         settings_outer_frame.grid_rowconfigure(2, weight=1)  # Options
 
         self.preview_lf = ttk.Labelframe(
-            settings_outer_frame, text=translate("Command Preview"), padding=(10, 5)
+            settings_outer_frame, text=f" {translate('Command Preview')} ", padding=(10, 5)
         )
         self.preview_lf.grid(row=0, column=0, sticky="nsew", padx=5, pady=(0, 2))
         self.preview_lf.grid_columnconfigure(0, weight=1)
@@ -189,16 +189,17 @@ class KaspaNodeTab(ttk.Frame):
         )
 
         self.options_lf = ttk.Labelframe(
-            settings_outer_frame, text=translate("Node Options"), padding=(10, 5)
+            settings_outer_frame, text=f" {translate('Node Options')} ", padding=(10, 5)
         )
         self.options_lf.grid(row=2, column=0, sticky="nsew", padx=5, pady=(2, 0))
         self.options_lf.grid_columnconfigure(0, weight=1)
         self.options_lf.grid_rowconfigure(0, weight=1)
 
-        options_scrolled_frame = ScrolledFrame(self.options_lf, autohide=True)
-        options_scrolled_frame.grid(row=0, column=0, sticky="nsew")
+        # --- SCROLLBAR FIX: Replaced ScrolledFrame with ttk.Frame ---
+        options_container = ttk.Frame(self.options_lf)
+        options_container.grid(row=0, column=0, sticky="nsew")
+        # --- END FIX ---
 
-        options_container = options_scrolled_frame.container
         options_container.grid_columnconfigure(
             (0, 1, 2, 3), weight=1, uniform="group1"
         )
@@ -295,6 +296,20 @@ class KaspaNodeTab(ttk.Frame):
 
         return settings_outer_frame
 
+    def update_preview_text_widget(self, command_str: str) -> None:
+        """Updates the ScrolledText widget with the command string."""
+        if hasattr(self, "command_preview_text"):
+            try:
+                # Store cursor position only if not focused
+                if self.focus_get() != self.command_preview_text.text:
+                    self.command_preview_text.text.config(state="normal")
+                    self.command_preview_text.text.delete("1.0", END)
+                    self.command_preview_text.text.insert("1.0", command_str)
+            except tk.TclError:
+                pass
+            except Exception:
+                self.command_preview_text.text.config(state="normal")
+
     def create_option_entry(
         self, master: ttk.Frame, label_text: str, key: str
     ) -> ttk.Frame:
@@ -382,7 +397,7 @@ class KaspaNodeTab(ttk.Frame):
     def create_controls_frame(self, master: ttk.Frame) -> ttk.Labelframe:
         """Create the main controls frame (Start, Stop, Update, etc.)."""
         self.controls_frame = ttk.Labelframe(
-            master, text=translate("Controls"), padding=10
+            master, text=f" {translate('Controls')} ", padding=10
         )
 
         button_frame = ttk.Frame(self.controls_frame)
@@ -525,7 +540,7 @@ class KaspaNodeTab(ttk.Frame):
     def create_network_frame(self, master: ttk.Frame) -> ttk.Labelframe:
         """Creates the 'Network & Logging' selection frame."""
         self.network_frame = ttk.Labelframe(
-            master, text=translate("Network & Logging"), padding=10
+            master, text=f" {translate('Network & Logging')} ", padding=10
         )
         self.network_frame.grid_columnconfigure(1, weight=1)
 
@@ -570,6 +585,7 @@ class KaspaNodeTab(ttk.Frame):
         if not netsuffix_vars:
              return self.network_frame
         
+        
         check_var, string_var, *_ = netsuffix_vars
 
         self.netsuffix_frame = ttk.Frame(self.network_frame)
@@ -607,7 +623,7 @@ class KaspaNodeTab(ttk.Frame):
     def create_custom_paths_frame(self, master: ttk.Frame) -> ttk.Labelframe:
         """Creates the 'Custom Paths' frame for EXE and URL."""
         self.custom_paths_frame = ttk.Labelframe(
-            master, text=translate("Custom Paths"), padding=10
+            master, text=f" {translate('Custom Paths')} ", padding=10
         )
 
         self.exe_cb = ttk.Checkbutton(
@@ -738,7 +754,7 @@ class KaspaNodeTab(ttk.Frame):
     def create_log_pane(self, master: ttk.Frame) -> ttk.Labelframe:
         """Create the 'Live Log' panel."""
         self.log_pane = ttk.Labelframe(
-            master, text=translate("Live Log"), padding=10
+            master, text=f" {translate('Live Log')} ", padding=10
         )
         self.log_pane.grid_rowconfigure(1, weight=1)
         self.log_pane.grid_columnconfigure(0, weight=1)
@@ -872,12 +888,12 @@ class KaspaNodeTab(ttk.Frame):
         self.notebook.tab(0, text=translate("Settings"))
         self.notebook.tab(1, text=translate("Log"))
 
-        self.log_pane.config(text=translate("Live Log"))
+        self.log_pane.config(text=f" {translate('Live Log')} ")
         self.clear_log_button.config(text=translate("Clear Log"))
         self.copy_log_button.config(text=translate("Copy Log"))
         self.log_autoscroll_cb.config(text=translate("Auto-Scroll"))
 
-        self.controls_frame.config(text=translate("Controls"))
+        self.controls_frame.config(text=f" {translate('Controls')} ")
         self.start_button.config(text=translate("Start Kaspa Node"))
         self.stop_button.config(text=translate("Stop Kaspa Node"))
         self.apply_restart_button.config(text=translate("Apply & Restart"))
@@ -896,11 +912,11 @@ class KaspaNodeTab(ttk.Frame):
             )
         self.db_size_button.config(text=translate("Refresh"))
 
-        self.preview_lf.config(text=translate("Command Preview"))
+        self.preview_lf.config(text=f" {translate('Command Preview')} ")
         self.copy_command_button.config(text=translate("Copy"))
         self.log_font_label.config(text=f"{translate('Font Size')}:")
 
-        self.network_frame.config(text=translate("Network & Logging"))
+        self.network_frame.config(text=f" {translate('Network & Logging')} ")
         
         if self.network_frame.winfo_children():
             self.network_frame.winfo_children()[0].config(text=f"{translate('Network')}:")
@@ -912,7 +928,7 @@ class KaspaNodeTab(ttk.Frame):
         if hasattr(self, "col1_label"):
             self.col1_label.config(text=translate("Paths & Logging"))
         if hasattr(self, "options_lf"):
-            self.options_lf.config(text=translate("Node Options"))
+            self.options_lf.config(text=f" {translate('Node Options')} ")
         if hasattr(self, "col4_rpc_label"):
             self.col4_rpc_label.config(text=translate("RPC"))
         if hasattr(self, "col2_label"):
@@ -960,7 +976,7 @@ class KaspaNodeTab(ttk.Frame):
             )
 
         if hasattr(self, "custom_paths_frame"):
-            self.custom_paths_frame.config(text=translate("Custom Paths"))
+            self.custom_paths_frame.config(text=f" {translate('Custom Paths')} ")
             self.exe_cb.config(text=translate("Use Custom kaspad.exe"))
             self.url_cb.config(text=translate("Use Custom Download URL"))
             self.url_path_label.config(

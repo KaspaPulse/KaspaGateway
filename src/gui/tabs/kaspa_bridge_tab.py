@@ -128,13 +128,16 @@ class BridgeInstanceTab(ttk.Frame):
         self.log_tab_frame.grid_rowconfigure(0, weight=1)
         self.log_tab_frame.grid_columnconfigure(0, weight=1)
 
-        self.notebook.add(self.settings_tab_frame, text=translate("Settings"))
-        self.notebook.add(self.log_tab_frame, text=translate("Log"))
+        self.notebook.add(self.settings_tab_frame, text=f" {translate('Settings')} ")
+        self.notebook.add(self.log_tab_frame, text=f" {translate('Log')} ")
 
-        settings_scrolled_frame = ScrolledFrame(self.settings_tab_frame, autohide=True)
-        settings_scrolled_frame.grid(row=0, column=0, sticky=NSEW)
+        # --- SCROLLBAR FIX: Replaced ScrolledFrame with ttk.Frame ---
+        settings_container_frame = ttk.Frame(self.settings_tab_frame)
+        settings_container_frame.grid(row=0, column=0, sticky=NSEW)
 
-        self.settings_pane = self.create_settings_pane(settings_scrolled_frame.container)
+        self.settings_pane = self.create_settings_pane(settings_container_frame)
+        # --- END FIX ---
+        
         self.settings_pane.pack(fill=BOTH, expand=True)
 
         self.log_pane = self.create_log_pane(self.log_tab_frame)
@@ -153,7 +156,7 @@ class BridgeInstanceTab(ttk.Frame):
 
         # Command Preview
         self.preview_lf = ttk.Labelframe(
-            settings_outer_frame, text=translate("Command Preview"), padding=10
+            settings_outer_frame, text=f" {translate('Command Preview')} ", padding=10
         )
         self.preview_lf.grid(row=0, column=0, sticky=NSEW, padx=5, pady=(0, 10))
         self.preview_lf.grid_columnconfigure(0, weight=1)
@@ -188,19 +191,19 @@ class BridgeInstanceTab(ttk.Frame):
         options_frame.grid_rowconfigure(0, weight=1)
 
         col1_frame = ttk.Frame(options_frame)
-        col1_frame.grid(row=0, column=0, sticky=NSEW, padx=(0, 5))
+        col1_frame.grid(row=0, column=0, sticky="new", padx=(0, 5))
         col1_frame.grid_columnconfigure(0, weight=1)
 
         col2_frame = ttk.Frame(options_frame)
-        col2_frame.grid(row=0, column=1, sticky=NSEW, padx=5)
+        col2_frame.grid(row=0, column=1, sticky="new", padx=5)
         col2_frame.grid_columnconfigure(0, weight=1)
 
         col3_frame = ttk.Frame(options_frame)
-        col3_frame.grid(row=0, column=2, sticky=NSEW, padx=5)
+        col3_frame.grid(row=0, column=2, sticky="new", padx=5)
         col3_frame.grid_columnconfigure(0, weight=1)
 
         col4_frame = ttk.Frame(options_frame)
-        col4_frame.grid(row=0, column=3, sticky=NSEW, padx=(5, 0))
+        col4_frame.grid(row=0, column=3, sticky="new", padx=(5, 0))
         col4_frame.grid_columnconfigure(0, weight=1)
 
         self.create_controls_frame(col1_frame).grid(
@@ -244,7 +247,7 @@ class BridgeInstanceTab(ttk.Frame):
     def create_controls_frame(self, master: ttk.Frame) -> ttk.Labelframe:
         """Create the main controls frame (Start, Stop, Update, etc.)."""
         self.controls_frame = ttk.Labelframe(
-            master, text=translate("Controls"), padding=10
+            master, text=f" {translate('Controls')} ", padding=10
         )
 
         button_frame = ttk.Frame(self.controls_frame)
@@ -481,7 +484,7 @@ class BridgeInstanceTab(ttk.Frame):
     def create_main_settings_frame(self, master: ttk.Frame) -> ttk.Labelframe:
         """Create the 'Main Settings' labelframe."""
         self.main_settings_frame = ttk.Labelframe(
-            master, text=translate("Main Settings"), padding=10
+            master, text=f" {translate('Main Settings')} ", padding=10
         )
         self._create_checkbox_entry_row(
             self.main_settings_frame,
@@ -502,7 +505,7 @@ class BridgeInstanceTab(ttk.Frame):
     def create_difficulty_frame(self, master: ttk.Frame) -> ttk.Labelframe:
         """Create the 'Difficulty & Vardiff' labelframe."""
         self.difficulty_frame = ttk.Labelframe(
-            master, text=translate("Difficulty & Vardiff"), padding=10
+            master, text=f" {translate('Difficulty & Vardiff')} ", padding=10
         )
         self._create_checkbox_entry_row(
             self.difficulty_frame,
@@ -537,7 +540,7 @@ class BridgeInstanceTab(ttk.Frame):
     def create_logging_frame(self, master: ttk.Frame) -> ttk.Labelframe:
         """Create the 'Logging & Stats' labelframe."""
         self.logging_frame = ttk.Labelframe(
-            master, text=translate("Logging & Stats"), padding=10
+            master, text=f" {translate('Logging & Stats')} ", padding=10
         )
         self._create_flag_row(
             self.logging_frame,
@@ -565,7 +568,7 @@ class BridgeInstanceTab(ttk.Frame):
     def create_advanced_frame(self, master: ttk.Frame) -> ttk.Labelframe:
         """Create the 'Advanced' labelframe."""
         self.advanced_frame = ttk.Labelframe(
-            master, text=translate("Advanced"), padding=10
+            master, text=f" {translate('Advanced')} ", padding=10
         )
         self._create_checkbox_entry_row(
             self.advanced_frame,
@@ -600,7 +603,7 @@ class BridgeInstanceTab(ttk.Frame):
     def create_custom_paths_frame(self, master: ttk.Frame) -> ttk.Labelframe:
         """Create the 'Custom Paths' labelframe."""
         self.custom_paths_frame = ttk.Labelframe(
-            master, text=translate("Custom Paths"), padding=10
+            master, text=f" {translate('Custom Paths')} ", padding=10
         )
 
         # Custom EXE Path
@@ -799,7 +802,7 @@ class BridgeInstanceTab(ttk.Frame):
     def create_log_pane(self, master: ttk.Frame) -> ttk.Labelframe:
         """Create the 'Live Log' panel."""
         self.log_pane = ttk.Labelframe(
-            master, text=translate("Live Log"), padding=10
+            master, text=f" {translate('Live Log')} ", padding=10
         )
         self.log_pane.grid_rowconfigure(1, weight=1)
         self.log_pane.grid_columnconfigure(0, weight=1)
@@ -935,11 +938,11 @@ class BridgeInstanceTab(ttk.Frame):
         self.notebook.tab(0, text=translate("Settings"))
         self.notebook.tab(1, text=translate("Log"))
 
-        self.log_pane.config(text=translate("Live Log"))
+        self.log_pane.config(text=f" {translate('Live Log')} ")
         self.clear_log_button.config(text=translate("Clear Log"))
         self.copy_log_button.config(text=translate("Copy Log"))
         self.log_autoscroll_cb.config(text=translate("Auto-Scroll"))
-        self.controls_frame.config(text=translate("Controls"))
+        self.controls_frame.config(text=f" {translate('Controls')} ")
 
         self.start_button.config(text=translate("Start Kaspa Bridge"))
         self.stop_button.config(text=translate("Stop Kaspa Bridge"))
@@ -955,7 +958,7 @@ class BridgeInstanceTab(ttk.Frame):
         if self.controller.instance_id == "_1" and hasattr(self, "enable_bridge_2_cb"):
              self.enable_bridge_2_cb.config(text=translate("Enable Bridge 2"))
 
-        self.main_settings_frame.config(text=translate("Main Settings"))
+        self.main_settings_frame.config(text=f" {translate('Main Settings')} ")
         self.main_settings_frame.winfo_children()[0].winfo_children()[0].config(
             text=translate("-kaspa (Kaspad Address)")
         )
@@ -963,7 +966,7 @@ class BridgeInstanceTab(ttk.Frame):
             text=translate("-stratum (e.g., :5555)")
         )
 
-        self.difficulty_frame.config(text=translate("Difficulty & Vardiff"))
+        self.difficulty_frame.config(text=f" {translate('Difficulty & Vardiff')} ")
         self.difficulty_frame.winfo_children()[0].winfo_children()[0].config(
             text=translate("-mindiff (Minimum Difficulty)")
         )
@@ -977,7 +980,7 @@ class BridgeInstanceTab(ttk.Frame):
             text=translate("-pow2clamp (Required for ASICs)")
         )
 
-        self.logging_frame.config(text=translate("Logging & Stats"))
+        self.logging_frame.config(text=f" {translate('Logging & Stats')} ")
         self.logging_frame.winfo_children()[0].winfo_children()[0].config(
             text=translate("-log (Enable Log File)")
         )
@@ -988,7 +991,7 @@ class BridgeInstanceTab(ttk.Frame):
             text=translate("-vardiffstats (Show Vardiff Stats)")
         )
 
-        self.advanced_frame.config(text=translate("Advanced"))
+        self.advanced_frame.config(text=f" {translate('Advanced')} ")
         self.advanced_frame.winfo_children()[0].winfo_children()[0].config(
             text=translate("-blockwait (e.g., 3s, 2000ms)")
         )
@@ -1003,7 +1006,7 @@ class BridgeInstanceTab(ttk.Frame):
         )
 
         if hasattr(self, "custom_paths_frame"):
-            self.custom_paths_frame.config(text=translate("Custom Paths"))
+            self.custom_paths_frame.config(text=f" {translate('Custom Paths')} ")
             self.exe_cb.config(text=translate("Use Custom ks_bridge.exe"))
             self.config_cb.config(text=translate("Use Custom config.yaml"))
             self.url_cb.config(text=translate("Use Custom Download URL"))
@@ -1016,7 +1019,7 @@ class BridgeInstanceTab(ttk.Frame):
                 )
             )
 
-        self.preview_lf.config(text=translate("Command Preview"))
+        self.preview_lf.config(text=f" {translate('Command Preview')} ")
         self.copy_command_button.config(text=translate("Copy"))
         self.log_font_label.config(text=f"{translate('Font Size')}:")
 
@@ -1085,7 +1088,7 @@ class KaspaBridgeTab(ttk.Frame):
             main_bridge_tab=self,
         )
         self.bridge1_tab_instance.grid(row=0, column=0, sticky=NSEW)
-        self.notebook.add(self.bridge1_frame, text=translate("Bridge 1"))
+        self.notebook.add(self.bridge1_frame, text=f" {translate('Bridge 1')} ")
 
         # Bridge 2 (Conditional)
         self.bridge2_frame = ttk.Frame(self.notebook, padding=0)
@@ -1126,7 +1129,7 @@ class KaspaBridgeTab(ttk.Frame):
                 )
                 self.bridge2_tab_instance.grid(row=0, column=0, sticky=NSEW)
             try:
-                self.notebook.add(self.bridge2_frame, text=translate("Bridge 2"))
+                self.notebook.add(self.bridge2_frame, text=f" {translate('Bridge 2')} ")
             except tk.TclError:
                 pass  # Tab already exists
         else:
@@ -1190,11 +1193,12 @@ class KaspaBridgeTab(ttk.Frame):
 
     def re_translate(self) -> None:
         """Propagate the re_translate event to child bridge controllers."""
-        self.notebook.tab(0, text=translate("Bridge 1"))
+        self.notebook.tab(0, text=f" {translate('Bridge 1')} ")
+        
         if self.bridge1_tab_instance:
             self.bridge1_tab_instance.controller.re_translate()
         if self.bridge2_tab_instance:
-            self.notebook.tab(1, text=translate("Bridge 2"))
+            self.notebook.tab(1, text=f" {translate('Bridge 2')} ")
             self.bridge2_tab_instance.controller.re_translate()
 
     def set_controls_state(self, active: bool) -> None:

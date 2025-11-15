@@ -97,10 +97,10 @@ class KaspaNodeController:
         self.external_process_pid: Optional[int] = None
 
         self.bin_dir: str = os.path.join(
-            os.getenv(
+            os.path.abspath(os.getenv(
                 "LOCALAPPDATA",
                 self.config_manager.get_config().get("paths", {}).get("database", ""),
-            ),
+            )),
             "KaspaGateway",
             "bin",
         )
@@ -409,7 +409,7 @@ class KaspaNodeController:
         This function is now the single source of truth for self.node_exe_path.
         """
         if self.use_custom_exe_var.get() and self.custom_exe_path_var.get():
-            self.node_exe_path = self.custom_exe_path_var.get()
+            self.node_exe_path = os.path.abspath(self.custom_exe_path_var.get())
         else:
             self.node_exe_path = os.path.join(self.bin_dir, "kaspad.exe")
 
@@ -1006,19 +1006,25 @@ class KaspaNodeController:
         exe_path_to_check: str = ""
 
         try:
-            command_str = self.view.command_preview_text.text.get("1.0", "end-1c").strip()
-            if command_str:
-                command_list = shlex.split(command_str)
+            # Always start with the correct, guaranteed internal path
+            command_list = [self.node_exe_path]
+            exe_path_to_check = self.node_exe_path
+
+            # Read args only from the text box
+            command_str_from_box = self.view.command_preview_text.text.get("1.0", "end-1c").strip()
             
-            if not command_list:
-                self.log_message("Command preview is empty. Building command from settings...")
-                command_list = self.build_args_from_settings()
-                command_str = " ".join(command_list)
-                if not command_list:
-                     messagebox.showerror(translate("Invalid Input"), "Command is empty.")
-                     return
-            
-            exe_path_to_check = command_list[0]
+            try:
+                # Find the first space to separate the exe path from args
+                first_space_index = command_str_from_box.index(' ')
+                args_str = command_str_from_box[first_space_index:].strip()
+                if args_str:
+                    # Safely parse only the arguments
+                    command_list.extend(shlex.split(args_str))
+            except ValueError:
+                pass # No arguments, just the executable
+
+            # Rebuild the correct command string
+            command_str = " ".join(command_list)
 
         except Exception as e:
             self.log_message(f"Error parsing command: {e}")
@@ -1182,7 +1188,7 @@ class KaspaNodeController:
                 psutil.wait_procs(children, timeout=3)
 
             except psutil.NoSuchProcess:
-                 self.log_message(translate("Node is not running."))
+                self.log_message(translate("Node is not running."))
             except Exception as e:
                 self.log_message(
                     f"Error while stopping node: {_sanitize_for_logging(e)}"
@@ -1465,7 +1471,7 @@ class KaspaNodeController:
 
     def update_db_size(self) -> None:
         """Triggers a background thread to calculate the DB size."""
-        if not hasattr(self.view, "db_size_label"):
+        if not hasattr(self, "view.db_size_label"):
             return
 
         self.view.db_size_label.config(
