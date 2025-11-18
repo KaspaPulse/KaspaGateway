@@ -1,11 +1,11 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import logging
 import os
 import queue
 import threading
 from contextlib import contextmanager
-from typing import Any, Dict, Iterator, List, Optional, TypeAlias, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple, TypeAlias
 
 import duckdb
 
@@ -46,38 +46,49 @@ class ConnectionPool:
         """Creates a new database connection."""
         try:
             base_name = os.path.basename(self.db_path)
-            logger.debug(f"Creating new DB connection to {base_name} (ReadOnly: {read_only})")
+            logger.debug(
+                f"Creating new DB connection to {base_name} (ReadOnly: {read_only})"
+            )
             # Pass read_only as a direct argument
             return duckdb.connect(
                 database=self.db_path, read_only=read_only, config=self.config
             )
         except Exception as e:
-            logger.error(f"Failed to create new DuckDB connection for {self.db_path}: {e}", exc_info=True)
+            logger.error(
+                f"Failed to create new DuckDB connection for {self.db_path}: {e}",
+                exc_info=True,
+            )
             raise ConnectionError(f"Failed to connect to {self.db_path}: {e}")
 
     def get_connection(self, read_only: bool = False) -> DuckDBPyConnection:
         """
         Gets a connection from the pool.
-        
+
         Note: All connections are created writeable (read_only=False) by default to avoid
         DuckDB's file locking conflicts when mixing read/write configs in the same process.
         """
         with self._lock:
             if not self._pool.empty():
                 base_name = os.path.basename(self.db_path)
-                logger.debug(f"Getting connection from pool for {base_name}. (Pool size: {self._pool.qsize()})")
+                logger.debug(
+                    f"Getting connection from pool for {base_name}. (Pool size: {self._pool.qsize()})"
+                )
                 return self._pool.get()
 
             if self.connection_count < self.max_connections:
                 self.connection_count += 1
                 base_name = os.path.basename(self.db_path)
-                logger.debug(f"Pool empty, creating new connection ({self.connection_count}/{self.max_connections}) for {base_name}")
+                logger.debug(
+                    f"Pool empty, creating new connection ({self.connection_count}/{self.max_connections}) for {base_name}"
+                )
                 # All connections are created read-write by default to avoid conflicts
                 return self._create_connection(read_only=False)
 
             base_name = os.path.basename(self.db_path)
-            logger.warning(f"Connection pool for {base_name} is empty and max connections ({self.max_connections}) reached. Waiting...")
-    
+            logger.warning(
+                f"Connection pool for {base_name} is empty and max connections ({self.max_connections}) reached. Waiting..."
+            )
+
         # If pool was empty and max connections reached, wait for one
         return self._pool.get(block=True, timeout=10)
 
@@ -91,16 +102,22 @@ class ConnectionPool:
             if self._pool.full():
                 logger.debug(f"Pool full, closing returned connection for {base_name}.")
                 conn.close()
-                self.connection_count -= 1  # Decrement count only when connection is closed
+                self.connection_count -= (
+                    1  # Decrement count only when connection is closed
+                )
             else:
-                logger.debug(f"Returning connection to pool for {base_name}. (Pool size: {self._pool.qsize() + 1})")
+                logger.debug(
+                    f"Returning connection to pool for {base_name}. (Pool size: {self._pool.qsize() + 1})"
+                )
                 self._pool.put(conn)
 
     def close_all(self) -> None:
         """Closes all connections currently in the pool and resets the count."""
         with self._lock:
             base_name = os.path.basename(self.db_path)
-            logger.warning(f"Closing all ({self._pool.qsize()}) pooled connections for {base_name}...")
+            logger.warning(
+                f"Closing all ({self._pool.qsize()}) pooled connections for {base_name}..."
+            )
             while not self._pool.empty():
                 try:
                     conn = self._pool.get_nowait()
@@ -109,7 +126,9 @@ class ConnectionPool:
                     break
                 except Exception as e:
                     logger.error(f"Error closing a connection: {e}")
-            logger.info(f"All connections in pool for {base_name} closed. Connection count reset to 0.")
+            logger.info(
+                f"All connections in pool for {base_name} closed. Connection count reset to 0."
+            )
             self.connection_count = 0
 
 
@@ -126,10 +145,10 @@ class DatabaseManager:
 
         self.db_path: str = db_path
         self.db_name: str = os.path.basename(db_path)
-        
+
         # Use a single connection pool per database file
         self.connection_pool: ConnectionPool = ConnectionPool(self.db_path)
-        
+
         logger.info(f"Database manager initialized for '{self.db_path}'")
 
     @contextmanager
@@ -144,20 +163,28 @@ class DatabaseManager:
             conn = self.connection_pool.get_connection(read_only=read_only)
             yield conn
         except Exception as e:
-            logger.error(f"Failed to establish connection to DuckDB at '{self.db_path}': {e}", exc_info=True)
+            logger.error(
+                f"Failed to establish connection to DuckDB at '{self.db_path}': {e}",
+                exc_info=True,
+            )
             raise ConnectionError(f"Failed to establish database connection: {e}")
         finally:
             if conn:
                 self.connection_pool.return_connection(conn)
 
-    def execute_query(self, query: str, params: Tuple[Any, ...] = (), read_only: bool = False) -> bool:
+    def execute_query(
+        self, query: str, params: Tuple[Any, ...] = (), read_only: bool = False
+    ) -> bool:
         """Executes a query that does not return data (e.g., INSERT, UPDATE, CREATE)."""
         try:
             with self.connect(read_only=read_only) as conn:
                 conn.execute(query, params)
             return True
         except Exception as e:
-            logger.error(f"Query failed on {self.db_name}: {query} | Params: {params} | Error: {e}", exc_info=True)
+            logger.error(
+                f"Query failed on {self.db_name}: {query} | Params: {params} | Error: {e}",
+                exc_info=True,
+            )
             return False
 
     def fetch_one(self, query: str, params: Tuple[Any, ...] = ()) -> Optional[Any]:
@@ -166,7 +193,10 @@ class DatabaseManager:
             with self.connect(read_only=True) as conn:
                 return conn.execute(query, params).fetchone()
         except Exception as e:
-            logger.error(f"Fetch one query failed on {self.db_name}: {query} | Params: {params} | Error: {e}", exc_info=True)
+            logger.error(
+                f"Fetch one query failed on {self.db_name}: {query} | Params: {params} | Error: {e}",
+                exc_info=True,
+            )
             return None
 
     def fetch_all(self, query: str, params: Tuple[Any, ...] = ()) -> List[Any]:
@@ -175,7 +205,10 @@ class DatabaseManager:
             with self.connect(read_only=True) as conn:
                 return conn.execute(query, params).fetchall()
         except Exception as e:
-            logger.error(f"Fetch all query failed on {self.db_name}: {query} | Params: {params} | Error: {e}", exc_info=True)
+            logger.error(
+                f"Fetch all query failed on {self.db_name}: {query} | Params: {params} | Error: {e}",
+                exc_info=True,
+            )
             return []
 
     def close(self) -> None:

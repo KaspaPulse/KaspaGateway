@@ -1,0 +1,4 @@
+# file: D:\KaspaGateway\src\export\pdf_export.py
+# hypothesis_version: 6.148.1
+
+[0.07, 0.1, 0.12, 0.25, 0.3, 0.42, 0.5, 0.8, 1024, '#007bff', '%Y-%m-%d %H:%M:%S', '.pdf', 'Amount (KAS)', 'BACKGROUND', 'CellStyle', 'Date/Time', 'DejaVuSans', 'DejaVuSans.ttf', 'Direction', 'Error', 'Export Successful', 'FooterLeft', 'FooterRight', 'FooterStyle', 'GRID', 'HeaderInfo', 'HeaderInfoLink', 'HeaderStyle', 'LEFTPADDING', 'LinkStyle', 'MIDDLE', 'N/A', 'Normal', 'RIGHTPADDING', 'TEXTCOLOR', 'TitleStyle', 'Transaction ID', 'Type:', 'VALIGN', 'address', 'amount', 'ar', 'bottomMargin', 'break', 'direction', 'en', 'explorer', 'fonts', 'h1', 'kaspa_address', 'language', 'leftMargin', 'main_template', 'normal', 'report_title', 'rightMargin', 's', 'timestamp', 'topMargin', 'transaction', 'txid', 'type']

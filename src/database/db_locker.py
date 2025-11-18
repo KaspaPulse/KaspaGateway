@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 """
@@ -14,11 +14,11 @@ It critically handles stale locks left behind by crashed processes by:
     "database is locked" IOException on the next startup.
 """
 
+import atexit
 import logging
 import os
-import atexit
 import time
-from typing import Dict, Optional, List, Any
+from typing import Any, Dict, List, Optional
 
 try:
     import psutil
@@ -61,7 +61,7 @@ def _cleanup_stale_lock(db_name: str, lock_path: str) -> bool:
         raise DatabaseError("psutil library is required for lock management.")
 
     try:
-        with open(lock_path, 'r', encoding='utf-8') as f:
+        with open(lock_path, "r", encoding="utf-8") as f:
             pid_str = f.read().strip()
             if not pid_str:
                 raise ValueError("Lock file is empty.")
@@ -69,27 +69,33 @@ def _cleanup_stale_lock(db_name: str, lock_path: str) -> bool:
 
         if psutil.pid_exists(pid):
             # Process is still running, lock is valid.
-            logger.warning(f"Database {db_name} is locked by an active process (PID: {pid}).")
+            logger.warning(
+                f"Database {db_name} is locked by an active process (PID: {pid})."
+            )
             return False
-        
+
         # Process is dead, lock is stale.
-        logger.warning(f"Stale lock file found for {db_name} (PID: {pid}). Cleaning up...")
+        logger.warning(
+            f"Stale lock file found for {db_name} (PID: {pid}). Cleaning up..."
+        )
 
     except (IOError, ValueError, psutil.Error) as e:
-        logger.warning(f"Could not read or validate stale lock file {lock_path}: {e}. Assuming stale.")
+        logger.warning(
+            f"Could not read or validate stale lock file {lock_path}: {e}. Assuming stale."
+        )
 
     try:
         # Clean up the stale .lock file
         os.remove(lock_path)
-        
+
         # CRITICAL: Clean up the associated .wal file
         wal_path = _get_wal_path(db_name)
         if os.path.exists(wal_path):
             os.remove(wal_path)
             logger.info(f"Removed stale WAL file: {wal_path}")
-            
+
         return True  # Stale lock was successfully cleaned up
-    
+
     except OSError as e:
         logger.error(f"Failed to clean up stale lock/WAL for {db_name}: {e}")
         return False  # Failed to clean up, safer to abort
@@ -101,7 +107,7 @@ def acquire_lock(db_name: str) -> bool:
     """
     global _lock_dir
     if not _lock_dir:
-        _lock_dir = CONFIG.get('paths', {}).get('database', '.')
+        _lock_dir = CONFIG.get("paths", {}).get("database", ".")
         os.makedirs(_lock_dir, exist_ok=True)
 
     lock_path = _get_lock_path(db_name)
@@ -115,16 +121,18 @@ def acquire_lock(db_name: str) -> bool:
         # At this point, no valid lock file exists
         # Attempt to create the lock file exclusively
         fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        with os.fdopen(fd, 'w') as f:
+        with os.fdopen(fd, "w") as f:
             f.write(str(os.getpid()))
-        
+
         _held_locks[db_name] = fd
         logger.debug(f"Acquired lock for {db_name}.")
         return True
 
     except FileExistsError:
         # Race condition: another process created the lock just now
-        logger.warning(f"Lock for {db_name} acquired by another process during race condition.")
+        logger.warning(
+            f"Lock for {db_name} acquired by another process during race condition."
+        )
         return False
     except (IOError, OSError) as e:
         logger.error(f"Failed to acquire lock for {db_name}: {e}")
@@ -171,10 +179,10 @@ def acquire_all_locks(config: Dict[str, Any]) -> bool:
     Attempts to acquire locks for all databases defined in the config.
     """
     global _lock_dir
-    _lock_dir = config.get('paths', {}).get('database', '.')
+    _lock_dir = config.get("paths", {}).get("database", ".")
     os.makedirs(_lock_dir, exist_ok=True)  # Ensure the data directory exists
-    
-    db_filenames: Dict[str, Any] = config.get('db_filenames', {})
+
+    db_filenames: Dict[str, Any] = config.get("db_filenames", {})
     if not db_filenames:
         logger.error("No database filenames found in config. Cannot acquire locks.")
         return False
@@ -183,11 +191,13 @@ def acquire_all_locks(config: Dict[str, Any]) -> bool:
     for db_name in db_filenames.values():
         if not acquire_lock(db_name):
             # Failed to get a lock, release all acquired locks and fail
-            logger.critical(f"Failed to acquire lock for {db_name}. Another instance may be running.")
+            logger.critical(
+                f"Failed to acquire lock for {db_name}. Another instance may be running."
+            )
             release_all_locks()
             return False
         locked_dbs.append(db_name)
-    
+
     logger.info(f"Successfully acquired locks for all databases: {locked_dbs}")
     # Register the cleanup function to run at Python exit
     atexit.register(release_all_locks)
@@ -200,7 +210,7 @@ def release_all_locks() -> None:
     """
     if not _held_locks:
         return
-        
+
     logger.info("Releasing all database locks...")
     # Create a copy of keys as release_lock modifies the dict
     for db_name in list(_held_locks.keys()):

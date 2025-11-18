@@ -1,0 +1,4 @@
+# file: D:\KaspaGateway\src\export\csv_export.py
+# hypothesis_version: 6.148.1
+
+['%Y-%m-%d %H:%M:%S', '.csv', 'Amount (KAS)', 'Block Score', 'Date/Time', 'Direction', 'Error', 'Export Successful', 'From Address(es)', 'N/A', 'To Address(es)', 'Transaction ID', 'Transaction URL', 'Type:', 'amount', 'block_height', 'direction', 'explorer', 'from_address', 's', 'timestamp', 'to_address', 'transaction', 'txid', 'type', 'utf-8-sig', 'w']

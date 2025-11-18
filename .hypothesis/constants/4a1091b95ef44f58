@@ -1,0 +1,4 @@
+# file: D:\KaspaGateway\src\utils\validation.py
+# hypothesis_version: 6.148.1
+
+[100, 65535, '***REDACTED***', '+', '-', '..', '/', '=', '@', '[\'\\"]', '[Unloggable Content]', '[^a-zA-Z0-9 \\-_()]', 'apikey', 'auth', 'key', 'password', 'pin', 'private', 'secret', 'signature', 'token', '|']

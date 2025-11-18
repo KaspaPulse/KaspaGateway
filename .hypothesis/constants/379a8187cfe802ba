@@ -1,0 +1,4 @@
+# file: D:\KaspaGateway\src\api\network.py
+# hypothesis_version: 6.148.1
+
+[1000.0, 100000000.0, '***REDACTED***', 'User-Agent', 'apikey', 'auth', 'backoff_factor', 'balance', 'base_url', 'blockdag', 'blockdag_info', 'blockreward', 'coinsupply', 'difficulty', 'endpoints', 'halving', 'hashrate', 'kaspad', 'key', 'max_hashrate', 'maxhashrate', 'network', 'password', 'performance', 'pin', 'private', 'retry_attempts', 'secret', 'signature', 'timeout', 'token']

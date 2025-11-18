@@ -1,0 +1,4 @@
+# file: D:\KaspaGateway\src\export\analysis_html_export.py
+# hypothesis_version: 6.148.1
+
+[0.0, '%Y-%m-%d %H:%M:%S', '.html', '</div>', '</tbody>', '<td></td>', 'Amount (KAS)', 'Block Score', 'Date/Time', 'Direction', 'Error', 'Export Successful', 'N/A', 'No.', 'Transaction ID', 'Type', 'address', 'amount', 'ar', 'block_height', 'direction', 'en', 'explorer', 'kaspa-table', 'language', 'left', 's', 'summary', 'timestamp', 'transaction', 'txid', 'type', 'utf-8', 'w']

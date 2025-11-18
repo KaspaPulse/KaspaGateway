@@ -1,69 +1,40 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
-*.class
-
-# C extensions
-*.so
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# PyInstaller
-#  Usually 'dist' would cover this
-*.spec
-
-# PyInstaller Windows specific
-# Uncomment if you need to keep build/ in version control
-# build/
-
-# Installer files
-/dist/*.exe
-/dist/*.msi
-
-# Cache files
-.cache/
+*$py.class
 .pytest_cache/
-.mypy_cache/
-.tox/
-.nox/
+.coverage
+htmlcov/
 
-# Virtual environment
-.venv/
+# Virtual Environment
 venv/
-ENV/
+env/
+.env
 
-# DB files
-user_data/
-*.db
-*.duckdb
-*.duckdb.wal
-*.lock
+# Distribution / Build
+dist/
+build/
+*.spec
+*.egg-info/
 
-# Log files
-*.log
-logs/
-
-# IDE settings
-.idea/
+# IDE Settings (Optional but recommended)
 .vscode/
+.idea/
 
-# OS-generated files
-.DS_Store
-Thumbs.db
+# Logs
+*.log
+
+secrets.txt
+
+KaspaGateway_Project_Full_Contents.txt
+
+# Security Audit Tools & Reports
+gitleaks.exe
+gitleaks.zip
+bandit-report.json
+bandit.yaml
+*.sarif
+
+# Local Environment & Secrets
+secrets.txt
+*_Contents.txt

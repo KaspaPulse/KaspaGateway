@@ -1,0 +1,4 @@
+# file: D:\KaspaGateway\src\utils\db_utils.py
+# hypothesis_version: 6.148.1
+
+['DatabaseManager', 'T', 'column', 'db_path', 'does not exist', 'no such table', 'unknown_db']

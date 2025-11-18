@@ -1,0 +1,4 @@
+# file: D:\KaspaGateway\src\database\database.py
+# hypothesis_version: 6.148.1
+
+[' AND "type" = ?', ' AND direction = ?', ' AND timestamp <= ?', ' AND timestamp >= ?', 'ALL', 'DELETE FROM cache', 'address', 'coinbase', 'created_at', 'df_view', 'difficulty', 'hashrate', 'incoming', 'name', 'outgoing', 'transfer']
