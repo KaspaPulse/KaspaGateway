@@ -1,4 +1,4 @@
-﻿# File: src/gui/input.py
+# File: src/gui/input.py
 """
 This module defines the Input widget, which includes the address entry/dropdown,
 balance display, and the main fetch/cancel buttons.
