@@ -1,3 +1,4 @@
+# File: src/gui/tabs/kaspa_node_controller.py
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -21,7 +22,7 @@ import tkinter as tk
 from tkinter import (
     DISABLED,
     END,
-    NORMAL,  # Added DISABLED, NORMAL
+    NORMAL,
     filedialog,
     messagebox,
 )
@@ -718,14 +719,14 @@ class KaspaNodeController:
             translate(
                 "kaspad.exe not found. This component is required to run a local node. Would you like to download it now?"
             )
-            + f"\\n\\n- {translate('Click Yes to download to default location:')}\\n{default_path}\\n\\n"
+            + f"\n\n- {translate('Click Yes to download to default location:')}\n{default_path}\n\n"
             + f"- {translate('Click No to select a custom location.')}"
         )
 
         if self.use_custom_url_var.get():
             msg_template = (
                 translate("Download from custom URL?")
-                + f"\\n\\n- {translate('Click Yes to download to default location:')}\\n{default_path}\\n\\n"
+                + f"\n\n- {translate('Click Yes to download to default location:')}\n{default_path}\n\n"
                 + f"- {translate('Click No to select a custom location.')}"
             )
 
@@ -795,15 +796,14 @@ class KaspaNodeController:
                 self.set_controls_state(True)
                 return
 
-            if not repo_url.endswith(".zip") and "api.github.com" not in repo_url:
-                if not validate_url(repo_url) or not repo_url.endswith(".zip"):
-                    messagebox.showerror(
-                        translate("Invalid Input"),
-                        "Custom URL must be a direct link to a .zip file.",
-                    )
-                    self.is_updating = False
-                    self.set_controls_state(True)
-                    return
+            if not validate_url(repo_url) or not repo_url.endswith(".zip"):
+                messagebox.showerror(
+                    translate("Invalid Input"),
+                    "Custom URL must be a direct link to a .zip file.",
+                )
+                self.is_updating = False
+                self.set_controls_state(True)
+                return
 
         progress_window = DownloadProgressWindow(
             self.main_window, title=translate("Update Node")
@@ -970,9 +970,8 @@ class KaspaNodeController:
                     except (tk.TclError, RuntimeError):
                         break
         except Exception as e:
-            if "Bad file descriptor" not in str(
-                e
-            ) and "most likely because it was closed" not in str(e):
+            # --- FIX: Be less aggressive about closing if pipe error is transient ---
+            if "Bad file descriptor" not in str(e) and "most likely because it was closed" not in str(e):
                 try:
                     if self.view.winfo_exists():
                         self.log_message(f"Error reading process output: {e}", "ERROR")
@@ -1238,6 +1237,15 @@ class KaspaNodeController:
 
     def on_process_exit(self) -> None:
         """Callback function when the subprocess terminates."""
+        
+        # --- FIX: Check if the process is ACTUALLY dead before cleaning up ---
+        if self.node_process and self.node_process.poll() is None:
+            # If poll() is None, the process is still running.
+            # The pipe might have just closed or timed out, but the node is alive.
+            # DO NOT clear self.node_process, or we lose track of it and trigger the "External Process" bug.
+            return
+        # ---------------------------------------------------------------------
+
         self.running_command_str = ""
         try:
             self.log_message(f"\n--- {translate('Process Terminated')} ---", "WARN")
@@ -1249,7 +1257,9 @@ class KaspaNodeController:
                 self.view.apply_restart_button.config(state="disabled")
         except (tk.TclError, RuntimeError):
             pass
+        
         self.node_process = None
+        
         try:
             if self.view.winfo_exists():
                 self.view.after(0, self.set_controls_state, True)
@@ -1395,7 +1405,6 @@ class KaspaNodeController:
                 self.config_manager.get_config().get("paths", {}).get("database", "")
             )
             safe_dir_roaming_base = os.path.abspath(os.path.dirname(db_path))
-
             safe_dir_roaming = (
                 os.path.abspath(os.path.dirname(safe_dir_roaming_base))
                 if safe_dir_roaming_base

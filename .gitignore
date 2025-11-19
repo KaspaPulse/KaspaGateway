@@ -23,10 +23,8 @@ build/
 
 # Logs
 *.log
-
-secrets.txt
-
-KaspaGateway_Project_Full_Contents.txt
+*.ps1
+*.txt
 
 # Security Audit Tools & Reports
 gitleaks.exe
@@ -35,6 +33,3 @@ bandit-report.json
 bandit.yaml
 *.sarif
 
-# Local Environment & Secrets
-secrets.txt
-*_Contents.txt
