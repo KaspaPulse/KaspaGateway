@@ -1,0 +1,4 @@
+# file: D:\KaspaGateway\src\database\db_manager.py
+# hypothesis_version: 6.148.1
+
+[1024.0, '.duckdb', 'CHECKPOINT', 'VACUUM', 'backup', 'database', 'last_modified', 'name', 'paths', 'size_kb']

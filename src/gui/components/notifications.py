@@ -1,8 +1,1 @@
-﻿from ttkbootstrap.toast import ToastNotification
-
-
-
-
-
-
-
+from ttkbootstrap.toast import ToastNotification

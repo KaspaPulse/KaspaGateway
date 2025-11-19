@@ -1,10 +1,12 @@
-﻿import logging
-from typing import List, Dict, Any
+import logging
+from typing import Any, Dict, List
+
 from src.database import AddressDB
-from src.utils.formatting import mask_address
 from src.utils.errors import DatabaseError
+from src.utils.formatting import mask_address
 
 logger = logging.getLogger(__name__)
+
 
 class AddressManager:
     """
@@ -12,6 +14,7 @@ class AddressManager:
     This class acts as a data access layer, abstracting the specific database calls
     and adding a layer of error handling.
     """
+
     def __init__(self, db: AddressDB) -> None:
         """
         Initializes the AddressManager.
@@ -35,7 +38,10 @@ class AddressManager:
             logger.error(f"Failed to get addresses: {e}")
             return []
         except Exception as e:
-            logger.error(f"An unexpected error occurred while getting addresses: {e}", exc_info=True)
+            logger.error(
+                f"An unexpected error occurred while getting addresses: {e}",
+                exc_info=True,
+            )
             return []
 
     def save_address(self, address: str, name: str) -> bool:

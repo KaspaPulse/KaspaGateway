@@ -5,28 +5,29 @@ within the main Settings tab.
 """
 
 from __future__ import annotations
-import ttkbootstrap as ttk
+
 import logging
 import os
 import shutil
 import threading
 import time
-from tkinter import messagebox, filedialog
 import tkinter as tk
+from datetime import datetime
+from tkinter import filedialog, messagebox
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple, cast
+
+import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from ttkbootstrap.toast import ToastNotification
-from typing import Dict, Any, Optional, Tuple, List, cast, TYPE_CHECKING, Callable, Set
-from datetime import datetime
 
-from src.utils.i18n import translate
 from src.config.config import CONFIG
 from src.database.db_locker import release_lock
-
+from src.utils.i18n import translate
 
 if TYPE_CHECKING:
-    from src.gui.main_window import MainWindow
-    from src.gui.config_manager import ConfigManager
     from src.database.db_manager import DatabaseManager
+    from src.gui.config_manager import ConfigManager
+    from src.gui.main_window import MainWindow
 
 logger = logging.getLogger(__name__)
 
@@ -38,20 +39,20 @@ class SettingsDbTab(ttk.Frame):
     """
 
     # --- Type Hint Declarations ---
-    main_window: 'MainWindow'
-    config_manager: 'ConfigManager'
-    db_manager: 'DatabaseManager'
+    main_window: "MainWindow"
+    config_manager: "ConfigManager"
+    db_manager: "DatabaseManager"
     db_buttons: Dict[str, ttk.Button]
     db_tree: ttk.Treeview
     db_btn_frame: ttk.Frame
     # --- End Type Hint Declarations ---
 
-    def __init__(self, parent: ttk.Frame, main_window: 'MainWindow') -> None:
+    def __init__(self, parent: ttk.Frame, main_window: "MainWindow") -> None:
         super().__init__(parent)
-        self.main_window: 'MainWindow' = main_window
-        
+        self.main_window: "MainWindow" = main_window
+
         self.config_manager = main_window.config_manager
-        self.db_manager: 'DatabaseManager' = main_window.db_manager
+        self.db_manager: "DatabaseManager" = main_window.db_manager
 
         self.db_buttons: Dict[str, ttk.Button] = {}
         self.db_tree: ttk.Treeview
@@ -69,7 +70,9 @@ class SettingsDbTab(ttk.Frame):
         table_frame.grid_rowconfigure(0, weight=1)
 
         columns: Tuple[str, ...] = ("Name", "Size", "Modified", "Details")
-        self.db_tree = ttk.Treeview(table_frame, columns=columns, show="headings", selectmode="extended")
+        self.db_tree = ttk.Treeview(
+            table_frame, columns=columns, show="headings", selectmode="extended"
+        )
         self.db_tree.grid(row=0, column=0, sticky="nsew")
         vsb_db = ttk.Scrollbar(table_frame, orient=VERTICAL, command=self.db_tree.yview)
         vsb_db.grid(row=0, column=1, sticky="ns")
@@ -84,12 +87,14 @@ class SettingsDbTab(ttk.Frame):
             ("Clear Caches", self._clear_caches, "warning"),
             ("Backup", self._backup_db, None),
             ("Restore", self._restore_db, None),
-            ("Delete", self._show_delete_db_dialog, "danger")
+            ("Delete", self._show_delete_db_dialog, "danger"),
         ]
 
         for key, cmd, style in btn_data:
             bootstyle: str = style if style else "default"
-            btn = ttk.Button(self.db_btn_frame, text=translate(key), command=cmd, bootstyle=bootstyle)
+            btn = ttk.Button(
+                self.db_btn_frame, text=translate(key), command=cmd, bootstyle=bootstyle
+            )
             btn.pack(side=LEFT, padx=5)
             self.db_buttons[key] = btn
 
@@ -113,34 +118,50 @@ class SettingsDbTab(ttk.Frame):
     def _fetch_db_details_worker(self) -> None:
         """Worker thread to get DB file info and row counts."""
         db_info_list: List[Dict[str, Any]] = self.db_manager.get_database_info()
-        db_filenames: Dict[str, str] = self.main_window.config_manager.get_config()['db_filenames']
+        db_filenames: Dict[str, str] = self.main_window.config_manager.get_config()[
+            "db_filenames"
+        ]
 
         for info in db_info_list:
             details: str = ""
             try:
-                db_name_lower: str = info['name'].lower()
-                
-                if db_name_lower == db_filenames.get('transactions', '').lower():
+                db_name_lower: str = info["name"].lower()
+
+                if db_name_lower == db_filenames.get("transactions", "").lower():
                     count: int = self.main_window.tx_db.get_total_transaction_count()
                     details = f"{count} {translate('transactions')}"
-                
-                elif db_name_lower == db_filenames.get('addresses', '').lower():
+
+                elif db_name_lower == db_filenames.get("addresses", "").lower():
                     count = self.main_window.addr_db.get_total_address_count()
                     details = f"{count} {translate('addresses')}"
-                
-                elif db_name_lower == db_filenames.get('app_data', '').lower():
-                    price_count: int = self.main_window.app_data_db.get_cached_prices_count()
-                    name_count: int = self.main_window.app_data_db.get_address_names_count()
+
+                elif db_name_lower == db_filenames.get("app_data", "").lower():
+                    price_count: int = (
+                        self.main_window.app_data_db.get_cached_prices_count()
+                    )
+                    name_count: int = (
+                        self.main_window.app_data_db.get_address_names_count()
+                    )
                     details = f"{price_count} {translate('price points')}, {name_count} {translate('Known Name')}"
-                
+
             except Exception as e:
                 logger.warning(f"Could not fetch details for {info['name']}: {e}")
                 details = translate("Error - See Logs")
 
             if self.winfo_exists():
-                self.after(0, lambda info=info, details=details: self.db_tree.insert("", "end", values=(
-                    info['name'], f"{info['size_kb']:.2f}", info['last_modified'].strftime('%Y-%m-%d %H:%M:%S'), details
-                )))
+                self.after(
+                    0,
+                    lambda info=info, details=details: self.db_tree.insert(
+                        "",
+                        "end",
+                        values=(
+                            info["name"],
+                            f"{info['size_kb']:.2f}",
+                            info["last_modified"].strftime("%Y-%m-%d %H:%M:%S"),
+                            details,
+                        ),
+                    ),
+                )
 
     def _compact_db(self) -> None:
         """Starts the database compaction process for the selected DB."""
@@ -148,11 +169,15 @@ class SettingsDbTab(ttk.Frame):
         if not db_name:
             return
 
-        if messagebox.askyesno(translate("Compact Database"), translate("Compact Warning").format(db_name)):
+        if messagebox.askyesno(
+            translate("Compact Database"), translate("Compact Warning").format(db_name)
+        ):
             self._set_buttons_state(DISABLED)
             self.main_window.status.update_status(translate("Compacting database..."))
 
-            threading.Thread(target=self._compact_db_worker, args=(db_name,), daemon=True).start()
+            threading.Thread(
+                target=self._compact_db_worker, args=(db_name,), daemon=True
+            ).start()
 
     def _compact_db_worker(self, db_name: str) -> None:
         """Worker thread to close connections, compact, and re-open."""
@@ -178,7 +203,7 @@ class SettingsDbTab(ttk.Frame):
                     title=translate("Compact Database"),
                     message=msg,
                     bootstyle=SUCCESS if success else DANGER,
-                    duration=3000
+                    duration=3000,
                 ).show_toast()
 
             self.after(0, ui_update)
@@ -190,14 +215,16 @@ class SettingsDbTab(ttk.Frame):
 
     def _clear_caches(self) -> None:
         """Clears cached price and network data from the AppData database."""
-        if messagebox.askyesno(translate("Confirm Action"), translate("Clear Caches Warning")):
+        if messagebox.askyesno(
+            translate("Confirm Action"), translate("Clear Caches Warning")
+        ):
             try:
                 self.main_window.app_data_db.clear_caches()
                 ToastNotification(
                     title=translate("Clear Caches"),
                     message=translate("Caches cleared successfully."),
                     bootstyle=SUCCESS,
-                    duration=3000
+                    duration=3000,
                 ).show_toast()
             except Exception as e:
                 logger.error(f"Failed to clear caches: {e}")
@@ -205,7 +232,7 @@ class SettingsDbTab(ttk.Frame):
                     title=translate("Error"),
                     message=str(e),
                     bootstyle=DANGER,
-                    duration=3000
+                    duration=3000,
                 ).show_toast()
             finally:
                 self._refresh_db_info()
@@ -218,7 +245,7 @@ class SettingsDbTab(ttk.Frame):
                 title=translate("No Selection"),
                 message=translate("No database selected."),
                 bootstyle=WARNING,
-                duration=3000
+                duration=3000,
             ).show_toast()
             return None
 
@@ -227,14 +254,14 @@ class SettingsDbTab(ttk.Frame):
                 title=translate("No Selection"),
                 message=translate("Please select only one database for this action."),
                 bootstyle=WARNING,
-                duration=3000
+                duration=3000,
             ).show_toast()
             return None
 
         if single:
-            return self.db_tree.item(sel[0])['values'][0]
+            return self.db_tree.item(sel[0])["values"][0]
 
-        return [self.db_tree.item(item_id)['values'][0] for item_id in sel]
+        return [self.db_tree.item(item_id)["values"][0] for item_id in sel]
 
     def _backup_db(self) -> None:
         """
@@ -245,46 +272,54 @@ class SettingsDbTab(ttk.Frame):
             return
 
         # Generate the unique filename here
-        ts: str = datetime.now().strftime('%Y%m%d%H%M%S')
+        ts: str = datetime.now().strftime("%Y%m%d%H%M%S")
         initial_filename: str = f"{os.path.splitext(db_name)[0]}_{ts}.duckdb"
-        
+
         # Use asksaveasfilename to allow user to choose location AND see the unique name
         backup_file_path: Optional[str] = filedialog.asksaveasfilename(
             initialfile=initial_filename,
             defaultextension=".duckdb",
-            filetypes=[(f"{translate('Kaspa Database Backup')}", "*.duckdb"), 
-                       (f"{translate('All Files')}", "*.*")],
+            filetypes=[
+                (f"{translate('Kaspa Database Backup')}", "*.duckdb"),
+                (f"{translate('All Files')}", "*.*"),
+            ],
             title=f"{translate('Save backup file for')} {db_name}",
-            initialdir=self.db_manager.backup_dir # Suggest the default backups folder
+            initialdir=self.db_manager.backup_dir,  # Suggest the default backups folder
         )
 
         if not backup_file_path:
             return
-            
-        if messagebox.askyesno(translate("Backup"), f"{translate('Create a backup of')} {db_name} {translate('to')} {os.path.basename(backup_file_path)}?"):
+
+        if messagebox.askyesno(
+            translate("Backup"),
+            f"{translate('Create a backup of')} {db_name} {translate('to')} {os.path.basename(backup_file_path)}?",
+        ):
             self._set_buttons_state(DISABLED)
             self.main_window.status.update_status(f"Backing up {db_name}...")
 
             # Execute the full locking and backup process in a worker thread.
             threading.Thread(
                 target=self._perform_db_backup,
-                args=(backup_file_path, db_name), # Pass the FINAL path selected by the user
-                daemon=True
+                args=(
+                    backup_file_path,
+                    db_name,
+                ),  # Pass the FINAL path selected by the user
+                daemon=True,
             ).start()
-    
+
     def _perform_db_backup(self, backup_file_path: str, db_name: str) -> None:
         """Worker thread to close connections, perform backup, and re-open."""
-        
+
         def error_ui_update(e: Exception) -> None:
             """UI update callback for errors."""
             self.main_window.reinitialize_databases()
             self._set_buttons_state(NORMAL)
             self.main_window.status.update_status(translate("Error"))
             ToastNotification(
-                title=translate("Error"), 
+                title=translate("Error"),
                 message=str(e),
                 bootstyle=DANGER,
-                duration=3000
+                duration=3000,
             ).show_toast()
 
         try:
@@ -298,9 +333,9 @@ class SettingsDbTab(ttk.Frame):
             db_path: str = os.path.join(self.db_manager.data_dir, db_name)
             if not os.path.exists(db_path):
                 raise FileNotFoundError(translate("Source database file not found."))
-                
+
             shutil.copy2(db_path, backup_file_path)
-            
+
             wal_path: str = f"{db_path}.wal"
             if os.path.exists(wal_path):
                 shutil.copy2(wal_path, f"{backup_file_path}.wal")
@@ -311,17 +346,17 @@ class SettingsDbTab(ttk.Frame):
             def ui_update() -> None:
                 """UI updates to run on the main thread after backup."""
                 final_msg = f"{msg}\n{translate('Location')}: {os.path.dirname(backup_file_path)}"
-                
+
                 # Step 3: Re-initialize connections
                 self.main_window.reinitialize_databases()
                 self._refresh_db_info()
                 self.main_window.status.update_status(translate("Ready"))
                 self._set_buttons_state(NORMAL)
                 ToastNotification(
-                    title=translate("Backup Successful"), 
+                    title=translate("Backup Successful"),
                     message=final_msg,
                     bootstyle=SUCCESS if success else DANGER,
-                    duration=5000 
+                    duration=5000,
                 ).show_toast()
 
             if self.winfo_exists():
@@ -345,21 +380,26 @@ class SettingsDbTab(ttk.Frame):
             title=f"{translate('Select backup file for')} {target_db_name}",
             initialdir=self.db_manager.backup_dir,
             defaultextension=".duckdb",
-            filetypes=[(f"{translate('Kaspa Database Backup')}", f"{base_name}_*.duckdb"), 
-                       (f"{translate('All Files')}", "*.*")]
+            filetypes=[
+                (f"{translate('Kaspa Database Backup')}", f"{base_name}_*.duckdb"),
+                (f"{translate('All Files')}", "*.*"),
+            ],
         )
 
         if not backup_file_path:
             return
-            
-        if messagebox.askyesno(translate("Restore"), f"{translate('This will overwrite')} {target_db_name} {translate('with')} {os.path.basename(backup_file_path)}. {translate('Continue?')}"):
+
+        if messagebox.askyesno(
+            translate("Restore"),
+            f"{translate('This will overwrite')} {target_db_name} {translate('with')} {os.path.basename(backup_file_path)}. {translate('Continue?')}",
+        ):
             self.main_window.status.update_status(f"Restoring {target_db_name}...")
             self._set_buttons_state(DISABLED)
 
             threading.Thread(
                 target=self._perform_db_restore,
                 args=(backup_file_path, target_db_name),
-                daemon=True
+                daemon=True,
             ).start()
 
     def _perform_db_restore(self, backup_file_path: str, target_db_name: str) -> None:
@@ -371,7 +411,9 @@ class SettingsDbTab(ttk.Frame):
             release_lock(target_db_name)
             time.sleep(0.2)
 
-            success, msg = self.db_manager.restore_database(backup_file_path, target_db_name)
+            success, msg = self.db_manager.restore_database(
+                backup_file_path, target_db_name
+            )
 
             def ui_update() -> None:
                 """UI updates to run on the main thread after restore."""
@@ -379,19 +421,19 @@ class SettingsDbTab(ttk.Frame):
                     title=translate("Restore"),
                     message=msg,
                     bootstyle=SUCCESS if success else DANGER,
-                    duration=3000
+                    duration=3000,
                 ).show_toast()
 
                 self.main_window.reinitialize_databases()
                 self._refresh_db_info()
 
-                if target_db_name == CONFIG['db_filenames']['addresses']:
+                if target_db_name == CONFIG["db_filenames"]["addresses"]:
                     if self.main_window.settings_tab.address_tab:
                         self.main_window.settings_tab.address_tab.refresh_address_list()
-                    if hasattr(self.main_window.explorer_tab, 'input_component'):
+                    if hasattr(self.main_window.explorer_tab, "input_component"):
                         self.main_window.explorer_tab.input_component.refresh_address_dropdown()
 
-                if hasattr(self.main_window, 'explorer_tab'):
+                if hasattr(self.main_window, "explorer_tab"):
                     self.main_window.explorer_tab.apply_explorer_filters()
 
                 self.main_window.status.update_status(translate("Ready"))
@@ -404,7 +446,6 @@ class SettingsDbTab(ttk.Frame):
             self.after(0, self.main_window.reinitialize_databases)
             self.after(0, self._set_buttons_state, NORMAL)
 
-
     def _show_delete_db_dialog(self) -> None:
         """Shows the confirmation dialog for deleting databases."""
         dbs_to_delete: Optional[List[str]] = self._get_selected_db_name()
@@ -415,7 +456,8 @@ class SettingsDbTab(ttk.Frame):
         confirm_message: str = (
             f"{translate('Selective DB Delete Warning')}\n\n"
             f"- {formatted_list}\n\n"
-            f"{translate('This action cannot be undone. Are you sure?')}")
+            f"{translate('This action cannot be undone. Are you sure?')}"
+        )
 
         if messagebox.askyesno(translate("Confirm Deletion"), confirm_message):
             self._delete_selected_databases(dbs_to_delete)
@@ -452,12 +494,16 @@ class SettingsDbTab(ttk.Frame):
 
         self.after(100, self._delete_db_step3_reinit, deleted_count, failed_dbs)
 
-    def _delete_db_step3_reinit(self, deleted_count: int, failed_dbs: List[str]) -> None:
+    def _delete_db_step3_reinit(
+        self, deleted_count: int, failed_dbs: List[str]
+    ) -> None:
         """Step 3: Re-initialize connections and update UI."""
         logger.info("Delete Step 3: Re-initializing databases and UI...")
 
         if deleted_count > 0:
-            logger.info(f"{deleted_count} {translate('databases deleted successfully.')}")
+            logger.info(
+                f"{deleted_count} {translate('databases deleted successfully.')}"
+            )
 
         self.main_window.reinitialize_databases()
         self._refresh_db_info()
@@ -472,7 +518,7 @@ class SettingsDbTab(ttk.Frame):
                 title=translate("Error"),
                 message=f"{translate('failed to delete some databases. Check logs.')}",
                 bootstyle=DANGER,
-                duration=3000
+                duration=3000,
             ).show_toast()
 
         self.main_window.status.update_status(translate("Ready"))
@@ -487,7 +533,7 @@ class SettingsDbTab(ttk.Frame):
             "Name": "DB File",
             "Size": "Size (KB)",
             "Modified": "Last Modified",
-            "Details": "Details"
+            "Details": "Details",
         }
 
         for col, text_key in db_cols.items():

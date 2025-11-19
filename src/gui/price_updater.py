@@ -1,8 +1,9 @@
-﻿import threading
-import logging
-import time
 import json
-from typing import Callable, Optional, Dict, TYPE_CHECKING
+import logging
+import threading
+import time
+from typing import TYPE_CHECKING, Callable, Dict, Optional
+
 from src.api.price import get_kaspa_prices
 from src.utils.errors import APIError
 
@@ -14,7 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 class PriceUpdater:
-    def __init__(self, main_window: 'MainWindow', db: 'AppDataDB', update_interval_sec: int = 600) -> None:
+    def __init__(
+        self, main_window: "MainWindow", db: "AppDataDB", update_interval_sec: int = 600
+    ) -> None:
         self.main_window = main_window
         self.db = db
         self.update_interval = update_interval_sec
@@ -39,14 +42,16 @@ class PriceUpdater:
         if self._thread and self._thread.is_alive():
             return
         self._stop_event.clear()
-        self._thread = threading.Thread(target=self._update_loop, daemon=True, name="PriceUpdateScheduler")
+        self._thread = threading.Thread(
+            target=self._update_loop, daemon=True, name="PriceUpdateScheduler"
+        )
         self._thread.start()
         logger.info("PriceUpdater service started and scheduled.")
 
     def stop(self) -> None:
         self._stop_event.set()
         logger.info("PriceUpdater stop requested.")
-        
+
     def initial_fetch(self) -> None:
         logger.info("Performing initial price fetch from cache or worker.")
         self.initial_fetch_complete.clear()
@@ -59,7 +64,11 @@ class PriceUpdater:
             logger.info("PriceUpdater loaded initial data from cache.")
             self.initial_fetch_complete.set()
         else:
-            threading.Thread(target=self._fetch_and_update_worker, daemon=True, name="InitialPriceWorker").start()
+            threading.Thread(
+                target=self._fetch_and_update_worker,
+                daemon=True,
+                name="InitialPriceWorker",
+            ).start()
 
     def _fetch_and_update_worker(self) -> None:
         logger.debug("Fetching prices in background worker.")
@@ -71,7 +80,9 @@ class PriceUpdater:
                 self.last_updated_ts = int(time.time())
                 if self.update_callback:
                     if self.main_window.winfo_exists():
-                        self.main_window.after(0, self.update_callback, self.current_prices)
+                        self.main_window.after(
+                            0, self.update_callback, self.current_prices
+                        )
         except APIError:
             logger.warning("API error fetching prices. Using last known values.")
         except Exception as e:

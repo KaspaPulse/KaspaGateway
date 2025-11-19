@@ -1,4 +1,4 @@
-﻿from .analysis_csv_export import export_analysis_to_csv
+from .analysis_csv_export import export_analysis_to_csv
 from .analysis_html_export import export_analysis_to_html
 from .analysis_pdf_export import export_analysis_to_pdf
 from .csv_export import export_to_csv as export_df_to_csv

@@ -1,4 +1,4 @@
-﻿; Inno Setup Script for KaspaGateway
+; Inno Setup Script for KaspaGateway
 ;
 ; This script defines how the Windows installer is built, including
 ; file locations, registry keys, and shortcuts.
@@ -26,8 +26,11 @@ PrivilegesRequired=lowest
 
 ; --- Output Installer File ---
 OutputDir=dist
-OutputBaseFilename=KaspaGateway_v1.0.0_Setup
+; *** MODIFICATION: Use the variable from the deploy.yml file ***
+OutputBaseFilename={#SetupFilename}
 SetupIconFile=assets\kaspa-white.ico
+; *** FIX: Added this line to show the icon in 'Add or Remove Programs' ***
+UninstallDisplayIcon={app}\KaspaGateway.exe
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -38,13 +41,10 @@ Name: "ar"; MessagesFile: "compiler:Languages\Arabic.isl"
 Name: "de"; MessagesFile: "compiler:Languages\German.isl"
 Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
 Name: "fr"; MessagesFile: "compiler:Languages\French.isl"
-Name: "hi"; MessagesFile: "compiler:Languages\Hindi.isl"
-Name: "id"; MessagesFile: "compiler:Languages\Indonesian.isl"
 Name: "ja"; MessagesFile: "compiler:Languages\Japanese.isl"
 Name: "ko"; MessagesFile: "compiler:Languages\Korean.isl"
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "tr"; MessagesFile: "compiler:Languages\Turkish.isl"
-Name: "zhcn"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
 [Dirs]
 ; --- Create User Data Directory ---
@@ -76,8 +76,10 @@ Name: "{userdesktop}\KaspaGateway"; Filename: "{app}\KaspaGateway.exe"; Paramete
 
 [Registry]
 ; --- Add Autostart registry key (if user enables it in the app) ---
+;
 ; This key is managed by the application's settings, but we ensure it's
-; removed on uninstall. The app itself will create/delete this key based on user choice.
+; removed on uninstall.
+; The app itself will create/delete this key based on user choice.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "KaspaGateway"; ValueData: """{app}\KaspaGateway.exe"" --user-data-path ""{userappdata}\KaspaGateway"""; Flags: uninsdeletevalue createvalueifdoesntexist
 
 [Run]

@@ -1,0 +1,4 @@
+# file: D:\KaspaGateway\src\export\top_addresses_html_export.py
+# hypothesis_version: 6.148.1
+
+['%.2f', '%Y-%m-%d %H:%M:%S', '.html', 'Address', 'Balance', 'Balance (KAS)', 'Error', 'Export Successful', 'Known Name', 'Rank', 'Top Addresses', 'Value', 'address', 'ar', 'en', 'explorer', 'kaspa-table', 'language', 'utf-8', 'w']

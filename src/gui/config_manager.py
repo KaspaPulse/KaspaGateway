@@ -1,9 +1,10 @@
-﻿import logging
-from typing import Dict, Any
+import logging
+from typing import Any, Dict
 
-from src.config.config import load_config, _save_config_file, DEFAULT_CONFIG, CONFIG
+from src.config.config import CONFIG, DEFAULT_CONFIG, _save_config_file, load_config
 
 logger = logging.getLogger(__name__)
+
 
 class ConfigManager:
     """

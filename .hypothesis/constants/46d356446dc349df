@@ -1,0 +1,4 @@
+# file: D:\KaspaGateway\src\database\db_schema.py
+# hypothesis_version: 6.148.1
+
+[', ', 'CREATE TABLE', 'address', 'addresses', 'amount', 'block_height', 'cache', 'direction', 'from_address', 'known_names', 'timestamp', 'to_address', 'transactions', 'txid', 'type', 'user_state']

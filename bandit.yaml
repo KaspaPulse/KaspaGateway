@@ -1,0 +1,4 @@
+skips:
+  - 'B101' # Skip assert checks (required for tests)
+  - 'B104' # Skip hardcoded_bind_all_interfaces (required for P2P node)
+exclude_dirs: ['venv']
