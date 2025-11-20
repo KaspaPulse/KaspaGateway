@@ -8,7 +8,7 @@ on:
 
 jobs:
   # ------------------------------------------------------------------
-  # JOB 1: THE ULTIMATE SECURITY & QUALITY AUDIT GATE
+  # JOB 1: SECURITY AUDIT
   # ------------------------------------------------------------------
   security-audit:
     runs-on: ubuntu-latest
@@ -16,66 +16,31 @@ jobs:
       security-events: write
       actions: read
       contents: read
-      
     steps:
-      - name: 1. Checkout code
-        uses: actions/checkout@v4
-
-      - name: 2. Set up Python 3.12
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: 3. Install Security & Test Tools
-        run: |
-          pip install pytest hypothesis bandit safety radon psutil anyio pip-audit
-
-      - name: 4. [SAST] Run Bandit Scan
-        run: |
-          echo "Running SAST (Bandit) Scan..."
-          bandit -r src -c bandit.yaml -ll
-
-      - name: 5. [SCA] Run Supply Chain Audit
-        run: |
-          echo "Running SCA (pip-audit) Scan..."
-          pip-audit
-
-      - name: 6. [Quality] Run Code Complexity Scan
-        run: |
-          echo "Running Code Quality (Radon) Scan..."
-          radon cc src -n F -a
-          # Use awk on Linux to check average complexity
-          radon cc src -a | awk '/Average complexity/ {avg=substr($3, 2, length($3)-2); if (avg > 20) { print "Radon Average Complexity (" avg ") exceeds threshold of 20 (Grade C)."; exit 1; }}'
-
-      - name: 7. [Secrets] Run Gitleaks Scan
-        run: |
-          echo "Running Secret Scanning (Gitleaks)..."
+      - run: pip install pytest hypothesis bandit safety radon psutil anyio pip-audit
+      - run: bandit -r src -c bandit.yaml -ll
+      - run: pip-audit
+      - run: radon cc src -n F -a
+      - run: |
           wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz
           tar -xzf gitleaks_8.18.4_linux_x64.tar.gz
           ./gitleaks detect --source . --verbose --exit-code 1
-
-      - name: 8. [Data-Flow] Initialize CodeQL
-        uses: github/codeql-action/init@v4
+      - uses: github/codeql-action/init@v4
         with:
           languages: python
-
-      - name: 9. [Data-Flow] Run CodeQL Autobuild
-        uses: github/codeql-action/autobuild@v4
-
-      - name: 10. [Data-Flow] Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v4
-        
-      - name: 11. [TESTING] Run Unit, Integration & Fuzz Tests
-        run: |
-          echo "Installing application dependencies for testing..."
+      - uses: github/codeql-action/autobuild@v4
+      - uses: github/codeql-action/analyze@v4
+      - run: |
           pip install -r requirements.in
-          echo "Setting PYTHONPATH to root directory..."
           export PYTHONPATH="${{ github.workspace }}:$PYTHONPATH"
-          echo "Running Pytest (Unit, Security, Fuzzing)..."
           pytest tests/
 
   # ------------------------------------------------------------------
-  # JOB 2: BUILD AND DEPLOY (Only runs if Job 1 succeeds)
+  # JOB 2: BUILD & DEPLOY (Clean Titles & Filenames)
   # ------------------------------------------------------------------
   build-and-deploy:
     needs: security-audit
@@ -84,59 +49,52 @@ jobs:
       contents: write
 
     steps:
-      - name: 1. Check out repository code
+      - name: 1. Checkout
         uses: actions/checkout@v4
 
-      - name: 2. Set up Python 3.12
+      - name: 2. Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: 3. Install App & Build Dependencies
+      - name: 3. Install Dependencies
         run: |
-          echo "Installing core application dependencies..."
           pip install -r requirements.in
-          echo "Installing Windows build dependencies..."
           pip install pyinstaller==6.16.0 pywin32==306
 
-      - name: 4. Add Inno Setup to PATH
+      - name: 4. Setup Inno Setup
         shell: powershell
-        run: |
-          echo "C:\Program Files (x86)\Inno Setup 6" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        run: echo "C:\Program Files (x86)\Inno Setup 6" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - name: 5. Download ISL Language Files
+      - name: 5. Download Languages
         shell: powershell
         run: |
           $langDir = "C:\Program Files (x86)\Inno Setup 6\Languages"
           $baseUrl = "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/"
           $languages = "Arabic.isl", "German.isl", "Spanish.isl", "French.isl", "Japanese.isl", "Korean.isl", "Russian.isl", "Turkish.isl"
-          foreach ($lang in $languages) {
-            $url = "$baseUrl$lang"
-            $file = "$langDir\$lang"
-            Invoke-WebRequest -Uri $url -OutFile $file
-          }
+          foreach ($lang in $languages) { Invoke-WebRequest "$baseUrl$lang" -OutFile "$langDir\$lang" }
 
-      # --- STEP 6: Inject Version Info (Internal Use Only) ---
-      # This ensures the app shows the hash in the header/title bar
-      - name: 6. Inject Version Info
+      # --- INTERNAL VERSIONING (Hidden from User Filename) ---
+      - name: 6. Inject Version Info (Internal)
         shell: powershell
         run: |
           $hash = "${{ github.sha }}".Substring(0, 8)
           $fileContent = "COMMIT_HASH = '$hash'"
           Set-Content -Path "src/version_info.py" -Value $fileContent
-          Write-Host "Successfully created src/version_info.py with hash: $hash"
 
-      # --- STEP 7: Set Filenames (CLEAN NAME - No Hash) ---
-      - name: 7. Set Dynamic Filenames
+      # --- EXTERNAL NAMING (Clean & Professional) ---
+      - name: 7. Set Clean Filenames
         shell: powershell
         run: |
-          # We define clean filenames here without the hash
+          # We force a clean name regardless of the hash
           if ("${{ github.ref_name }}" -eq "dev") {
             echo "RELEASE_TAG=dev-latest" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-            echo "SETUP_FILENAME=KaspaGateway_v1.0.0_Dev_Setup" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            # Clean Name for Dev:
+            echo "SETUP_FILENAME=KaspaGateway_Dev_Setup" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           } else {
             echo "RELEASE_TAG=v1.0.0" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-            echo "SETUP_FILENAME=KaspaGateway_v1.0.0_Setup" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            # Clean Name for Production:
+            echo "SETUP_FILENAME=KaspaGateway_Setup" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           }
 
       - name: 8. Run PyInstaller
@@ -145,28 +103,28 @@ jobs:
       - name: 9. Run Inno Setup
         run: iscc ".\installer_script.iss" /DSetupFilename=${{ env.SETUP_FILENAME }}
 
-      - name: 10. Calculate SHA256 Hash
+      - name: 10. Calculate SHA256
         shell: powershell
         run: |
           $filePath = "dist\${{ env.SETUP_FILENAME }}.exe"
           $hashPath = "$filePath.sha256"
           Get-FileHash -Algorithm SHA256 $filePath | Select-Object -ExpandProperty Hash | Set-Content $hashPath
 
-      - name: 11. Delete and Re-create Release
+      - name: 11. Publish Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: powershell
         run: |
           $files = "dist\${{ env.SETUP_FILENAME }}.exe", "dist\${{ env.SETUP_FILENAME }}.exe.sha256"
           $tag = "${{ env.RELEASE_TAG }}"
-          try {
-            gh release delete $tag --yes --cleanup-tag
-          } catch {
-            Write-Host "Could not delete release (it might not exist, which is okay)."
-          }
+          
+          # Delete old release to keep it clean
+          try { gh release delete $tag --yes --cleanup-tag } catch {}
+
           if ("${{ github.ref_name }}" -eq "dev") {
-            gh release create $tag $files --title "Development Build (${{ github.sha }})" --notes "Automated build from dev branch." --prerelease
+            # Cleaner Title for Dev Build (No Hash in Title)
+            gh release create $tag $files --title "KaspaGateway Development Build" --notes "Latest automated build from dev branch.`nCommit: ${{ github.sha }}" --prerelease
           } else {
-            gh release create $tag $files --title "KaspaGateway v1.0.0" --notes "Stable release. (${{ github.sha }})"
+            # Cleaner Title for Stable Build
+            gh release create $tag $files --title "KaspaGateway v1.0.0" --notes "Official Stable Release."
           }
-          Write-Host "Release $tag created and assets uploaded successfully."
