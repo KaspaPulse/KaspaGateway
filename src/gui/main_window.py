@@ -95,8 +95,6 @@ class MainWindow(ttk.Window):
         self.kaspa_bridge_tab: Optional[KaspaBridgeTab] = None
         self.status: Optional[Status] = None
         self.progress_bar: Optional[ttk.Progressbar] = None
-        
-        # Removed self.cancel_button from init as requested
 
         self._build_ui_structure()
 
@@ -144,6 +142,7 @@ class MainWindow(ttk.Window):
         # Fallback to Git command (For Dev Mode)
         if not commit:
             try:
+                # Using --short=7 to try to get 7 chars, but slicing below is safer
                 commit = subprocess.check_output(
                     ["git", "rev-parse", "--short", "HEAD"],
                     stderr=subprocess.DEVNULL
@@ -152,7 +151,9 @@ class MainWindow(ttk.Window):
                 pass
 
         if commit:
-            full_version = f"{base_ver}-{commit}"
+            # FIX: Enforce exactly 7 characters to match GitHub display
+            commit_short = commit[:7]
+            full_version = f"{base_ver}-{commit_short}"
             CONFIG["version"] = full_version
             self.title(f"KaspaGateway Version {full_version}")
         else:
@@ -655,8 +656,6 @@ class MainWindow(ttk.Window):
         f.grid_columnconfigure(0, weight=1)
         self.status = Status(f)
         self.status.grid(row=0, column=0, sticky="ew")
-
-        # DELETED: self.cancel_button creation from here
 
         self.progress_bar = ttk.Progressbar(
             self, mode="indeterminate", bootstyle="success-striped"
