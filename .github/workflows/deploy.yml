@@ -1,4 +1,4 @@
-name: Build, Test, and Deploy Continuous Release
+﻿name: Build, Test, and Deploy Continuous Release
 
 on:
   push:
@@ -12,7 +12,6 @@ jobs:
   # ------------------------------------------------------------------
   security-audit:
     runs-on: ubuntu-latest
-    # --- FIX: Added permissions for CodeQL v4 ---
     permissions:
       security-events: write
       actions: read
@@ -56,7 +55,6 @@ jobs:
           ./gitleaks detect --source . --verbose --exit-code 1
 
       - name: 8. [Data-Flow] Initialize CodeQL
-        # --- FIX: Upgraded to v4 ---
         uses: github/codeql-action/init@v4
         with:
           languages: python
@@ -70,7 +68,6 @@ jobs:
       - name: 11. [TESTING] Run Unit, Integration & Fuzz Tests
         run: |
           echo "Installing application dependencies for testing..."
-          # --- FIX: This requirements.in file is now Linux-safe ---
           pip install -r requirements.in
           echo "Setting PYTHONPATH to root directory..."
           export PYTHONPATH="${{ github.workspace }}:$PYTHONPATH"
@@ -100,7 +97,6 @@ jobs:
           echo "Installing core application dependencies..."
           pip install -r requirements.in
           echo "Installing Windows build dependencies..."
-          # --- FIX: Install build-only dependencies here ---
           pip install pyinstaller==6.16.0 pywin32==306
 
       - name: 4. Add Inno Setup to PATH
@@ -120,31 +116,43 @@ jobs:
             Invoke-WebRequest -Uri $url -OutFile $file
           }
 
-      - name: 6. Set Dynamic Filenames
+      # --- STEP 6: Inject Version Info (Internal Use Only) ---
+      # This ensures the app shows the hash in the header/title bar
+      - name: 6. Inject Version Info
         shell: powershell
         run: |
+          $hash = "${{ github.sha }}".Substring(0, 8)
+          $fileContent = "COMMIT_HASH = '$hash'"
+          Set-Content -Path "src/version_info.py" -Value $fileContent
+          Write-Host "Successfully created src/version_info.py with hash: $hash"
+
+      # --- STEP 7: Set Filenames (CLEAN NAME - No Hash) ---
+      - name: 7. Set Dynamic Filenames
+        shell: powershell
+        run: |
+          # We define clean filenames here without the hash
           if ("${{ github.ref_name }}" -eq "dev") {
             echo "RELEASE_TAG=dev-latest" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-            echo "SETUP_FILENAME=KaspaGateway_v1.0.0-dev_Setup" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            echo "SETUP_FILENAME=KaspaGateway_v1.0.0_Dev_Setup" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           } else {
             echo "RELEASE_TAG=v1.0.0" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
             echo "SETUP_FILENAME=KaspaGateway_v1.0.0_Setup" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           }
 
-      - name: 7. Run PyInstaller
+      - name: 8. Run PyInstaller
         run: pyinstaller KaspaGateway.spec --clean --noconfirm
 
-      - name: 8. Run Inno Setup
+      - name: 9. Run Inno Setup
         run: iscc ".\installer_script.iss" /DSetupFilename=${{ env.SETUP_FILENAME }}
 
-      - name: 9. Calculate SHA256 Hash
+      - name: 10. Calculate SHA256 Hash
         shell: powershell
         run: |
           $filePath = "dist\${{ env.SETUP_FILENAME }}.exe"
           $hashPath = "$filePath.sha256"
           Get-FileHash -Algorithm SHA256 $filePath | Select-Object -ExpandProperty Hash | Set-Content $hashPath
 
-      - name: 10. Delete and Re-create Release
+      - name: 11. Delete and Re-create Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: powershell
@@ -157,7 +165,7 @@ jobs:
             Write-Host "Could not delete release (it might not exist, which is okay)."
           }
           if ("${{ github.ref_name }}" -eq "dev") {
-            gh release create $tag $files --title "Development Build" --notes "Latest automated build from dev branch. (${{ github.sha }})" --prerelease
+            gh release create $tag $files --title "Development Build (${{ github.sha }})" --notes "Automated build from dev branch." --prerelease
           } else {
             gh release create $tag $files --title "KaspaGateway v1.0.0" --notes "Stable release. (${{ github.sha }})"
           }
