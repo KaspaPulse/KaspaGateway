@@ -1,4 +1,5 @@
-# File: src/gui/input.py
+﻿#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 This module defines the Input widget, which includes the address entry/dropdown,
 balance display, and the main fetch/cancel buttons.
@@ -10,10 +11,11 @@ import logging
 import tkinter as tk
 import webbrowser
 from tkinter import messagebox
-from typing import TYPE_CHECKING, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
+import pandas as pd
 import ttkbootstrap as ttk
-from ttkbootstrap.constants import *
+from ttkbootstrap.constants import DISABLED, LEFT, NORMAL, X, Y
 from ttkbootstrap.tooltip import ToolTip
 
 from src.config.config import CONFIG
@@ -37,10 +39,9 @@ class Input(ttk.Labelframe):
     The main input composite widget for loading addresses and initiating fetches.
     """
 
-    # --- Class Attribute Type Declarations ---
-    main_window: "MainWindow"
-    transaction_manager: "TransactionManager"
-    address_manager: "AddressManager"
+    main_window: MainWindow
+    transaction_manager: TransactionManager
+    address_manager: AddressManager
     placeholder_active: bool
 
     address_label: ttk.Label
@@ -56,24 +57,23 @@ class Input(ttk.Labelframe):
     fetch_tooltip: ToolTip
     force_fetch_tooltip: ToolTip
     cancel_tooltip: ToolTip
-    # --- End Attribute Declarations ---
 
     def __init__(
         self,
         parent: ttk.Frame,
-        main_window: "MainWindow",
-        transaction_manager: "TransactionManager",
-        address_manager: "AddressManager",
+        main_window: MainWindow,
+        transaction_manager: TransactionManager,
+        address_manager: AddressManager,
     ) -> None:
         """
         Initializes the Input widget.
         """
         super().__init__(parent, text=f" {translate('Load Address')} ", padding=10)
-        self.main_window: "MainWindow" = main_window
-        self.transaction_manager: "TransactionManager" = transaction_manager
-        self.address_manager: "AddressManager" = address_manager
+        self.main_window = main_window
+        self.transaction_manager = transaction_manager
+        self.address_manager = address_manager
 
-        self.placeholder_active: bool = False
+        self.placeholder_active = False
 
         self._build_ui()
         self.refresh_address_dropdown()
@@ -93,29 +93,28 @@ class Input(ttk.Labelframe):
         self.address_combo.bind("<<ComboboxSelected>>", self._on_dropdown_select)
         self.address_combo.bind("<KeyRelease>", self._on_address_entry_change)
 
-        # --- Balance Display Area (Fixed to Two Rows) ---
-        # Container to hold the balance info to the right of the input box
+        # --- Balance Display Area ---
         balance_container = ttk.Frame(container)
         balance_container.grid(row=0, column=2, sticky="e", padx=10, pady=5)
         balance_container.grid_columnconfigure(0, weight=1)
 
-        # Row 1: Balance Title and KAS Value (Top Row)
+        # Row 1: Balance Title and KAS Value
         kas_balance_frame = ttk.Frame(balance_container)
-        kas_balance_frame.pack(anchor="e") # Packs at the top
+        kas_balance_frame.pack(anchor="e")
 
         self.balance_label_title = ttk.Label(
             kas_balance_frame, text=f"{translate('Balance')}:"
         )
         self.balance_label_title.pack(side=LEFT, padx=(0, 5))
-        
+
         self.balance_label_value = ttk.Label(
             kas_balance_frame, text="N/A", font="-weight bold", bootstyle="info"
         )
         self.balance_label_value.pack(side=LEFT)
 
-        # Row 2: Address Name and Fiat Value (Bottom Row)
+        # Row 2: Address Name and Fiat Value
         fiat_balance_frame = ttk.Frame(balance_container)
-        fiat_balance_frame.pack(anchor="e") # Packs below the first frame automatically
+        fiat_balance_frame.pack(anchor="e")
 
         self.balance_label_name = ttk.Label(
             fiat_balance_frame,
@@ -124,17 +123,16 @@ class Input(ttk.Labelframe):
             bootstyle="success",
         )
         self.balance_label_name.pack(side=LEFT, padx=(0, 5))
-        
+
         self.balance_label_fiat_value = ttk.Label(
             fiat_balance_frame, text="", font="-size 9", bootstyle="secondary"
         )
         self.balance_label_fiat_value.pack(side=LEFT)
-        # --- End Balance Display Area ---
 
         # --- Action Buttons ---
         button_frame = ttk.Frame(container)
         button_frame.grid(row=0, column=3, padx=5, pady=5)
-        
+
         self.fetch_button = ttk.Button(
             button_frame,
             text=translate("Fetch"),
@@ -142,7 +140,7 @@ class Input(ttk.Labelframe):
             bootstyle="primary",
         )
         self.fetch_button.pack(side=LEFT, fill=Y, expand=True, padx=(0, 2))
-        
+
         self.force_fetch_button = ttk.Button(
             button_frame,
             text=translate("Force Fetch"),
@@ -152,7 +150,9 @@ class Input(ttk.Labelframe):
         self.force_fetch_button.pack(side=LEFT, fill=Y, expand=True, padx=(0, 5))
 
         self.explorer_btn = ttk.Button(
-            button_frame, text=translate("Explorer"), command=self._open_in_explorer
+            button_frame,
+            text=translate("Explorer"),
+            command=self._open_in_explorer,
         )
         self.explorer_btn.pack(side=LEFT, fill=Y, expand=True)
 
@@ -176,28 +176,26 @@ class Input(ttk.Labelframe):
 
     def _on_address_entry_change(self, event: Optional[tk.Event] = None) -> None:
         """Validates the address entry on key release."""
-        address: str = self.address_combo.get().strip()
-        is_valid: bool = validate_kaspa_address(address)
-
+        addr: str = self.address_combo.get().strip()
         if hasattr(self.main_window, "_update_ui_for_address_validity"):
-            self.main_window._update_ui_for_address_validity(is_valid)
+            self.main_window._update_ui_for_address_validity(
+                validate_kaspa_address(addr)
+            )
 
     def _open_in_explorer(self) -> None:
         """Opens the currently entered address in the Kaspa explorer."""
-        address: str = self.address_combo.get().strip()
-        if not validate_kaspa_address(address):
-            return
+        addr: str = self.address_combo.get().strip()
+        if validate_kaspa_address(addr):
+            active_profile = CONFIG["api"]["profiles"].get(
+                CONFIG["api"]["active_profile"], {}
+            )
+            url_template = active_profile.get("explorer", {}).get("address", "")
 
-        active_profile = CONFIG["api"]["profiles"].get(
-            CONFIG["api"]["active_profile"], {}
-        )
-        url_template = active_profile.get("explorer", {}).get("address", "")
-
-        if url_template:
-            url = url_template.format(kaspaAddress=address)
-            webbrowser.open(url, new=2)
-        else:
-            logger.warning("Explorer URL template not found in config.")
+            if url_template:
+                url = url_template.format(kaspaAddress=addr)
+                webbrowser.open(url, new=2)
+            else:
+                logger.warning("Explorer URL template not found in config.")
 
     def _on_dropdown_select(self, event: Optional[tk.Event] = None) -> None:
         """
@@ -210,6 +208,13 @@ class Input(ttk.Labelframe):
         self._on_address_entry_change()
 
         if (
+            hasattr(self.main_window, "current_address")
+            and self.main_window.current_address
+        ):
+            if address.lower() == self.main_window.current_address.lower():
+                return
+
+        if (
             hasattr(self.main_window, "explorer_tab")
             and address != self.main_window.current_address
         ):
@@ -219,9 +224,7 @@ class Input(ttk.Labelframe):
             self.main_window.explorer_tab.results_component.current_df = pd.DataFrame()
 
     def _on_load_transactions(self, force: bool = False) -> None:
-        """
-        Initiates the transaction fetch process.
-        """
+        """Initiates the transaction fetch process."""
         address: str = self.address_combo.get().strip()
 
         if not validate_kaspa_address(address):
@@ -265,6 +268,9 @@ class Input(ttk.Labelframe):
         self, balance_kas: Optional[float], address_name: Optional[str]
     ) -> None:
         """Updates the balance labels with new data."""
+        if not self.winfo_exists():
+            return
+
         self.balance_label_name.config(text=f"{address_name}" if address_name else "")
 
         if balance_kas is not None:
@@ -325,7 +331,9 @@ class Input(ttk.Labelframe):
     def set_ui_state(self, is_fetching: bool) -> None:
         """Enables or disables UI elements based on fetch state."""
         state: str = DISABLED if is_fetching else NORMAL
-        is_valid_addr: bool = validate_kaspa_address(self.address_combo.get().strip())
+        is_valid_addr: bool = validate_kaspa_address(
+            self.address_combo.get().strip()
+        )
 
         try:
             # Disable/Enable Entry and Cancel button
@@ -334,14 +342,14 @@ class Input(ttk.Labelframe):
 
             # Determine state for Fetch buttons AND Explorer button
             # They should be disabled if fetching OR if address is invalid
-            action_btn_state: str = NORMAL if not is_fetching and is_valid_addr else DISABLED
-            
+            action_btn_state: str = (
+                NORMAL if not is_fetching and is_valid_addr else DISABLED
+            )
+
             self.fetch_button.configure(state=action_btn_state)
             self.force_fetch_button.configure(state=action_btn_state)
-            
-            # --- FIX: Disable Explorer button when fetching/exporting ---
             self.explorer_btn.configure(state=action_btn_state)
-            
+
         except tk.TclError:
             pass
 
