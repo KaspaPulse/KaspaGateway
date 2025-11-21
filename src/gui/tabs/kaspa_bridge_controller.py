@@ -4,8 +4,6 @@
 Contains the Controller (logic and state) for the BridgeInstanceTab (View).
 This file handles all business logic, state management, and subprocess
 interactions for a single ks_bridge instance.
-
-Refactored to improve code modularity, type safety, and maintainability.
 """
 
 from __future__ import annotations
@@ -13,7 +11,6 @@ from __future__ import annotations
 import logging
 import os
 import re
-import shlex
 import subprocess
 import sys
 import threading
@@ -29,12 +26,11 @@ from typing import (
     Optional,
     Set,
     Tuple,
-    cast,
 )
 
 import psutil
 import ttkbootstrap as ttk
-from ttkbootstrap.constants import DANGER, DISABLED, NORMAL, SUCCESS, X
+from ttkbootstrap.constants import SUCCESS
 from ttkbootstrap.toast import ToastNotification
 
 from src.config.config import CONFIG
@@ -48,7 +44,6 @@ from src.utils.validation import (
     _sanitize_for_logging,
     sanitize_cli_arg,
     validate_ip_port,
-    validate_url,
 )
 
 if sys.platform == "win32":
@@ -60,8 +55,8 @@ if sys.platform == "win32":
         ctypes = None  # type: ignore
         wintypes = None  # type: ignore
 else:
-    ctypes = None  # type: ignore
-    wintypes = None  # type: ignore
+    ctypes = None
+    wintypes = None
 
 if TYPE_CHECKING:
     from src.gui.config_manager import ConfigManager
@@ -80,7 +75,6 @@ class BridgeInstanceController:
     Manages all state and logic, interacting with BridgeInstanceTab (View).
     """
 
-    # --- Class Attribute Type Declarations ---
     view: BridgeInstanceTab
     main_window: MainWindow
     config_manager: ConfigManager
@@ -101,7 +95,7 @@ class BridgeInstanceController:
     flag_key_to_enabled_var_map: Dict[str, ttk.BooleanVar]
     _stop_requested: bool
 
-    # --- TK Variable Declarations ---
+    # TK Variables
     kaspa_addr_var: Tuple[ttk.StringVar, ttk.StringVar]
     stratum_port_var: ttk.StringVar
     prom_port_var: ttk.StringVar
@@ -145,7 +139,6 @@ class BridgeInstanceController:
     log_file_enabled_var: ttk.BooleanVar
     console_stats_enabled_var: ttk.BooleanVar
     vardiff_stats_enabled_var: ttk.BooleanVar
-    # --- End Variable Declarations ---
 
     def __init__(
         self,
@@ -587,7 +580,7 @@ class BridgeInstanceController:
             ).show_toast()
 
     def autostart_if_enabled(self, is_autostart: bool = False) -> None:
-        """Start the bridge if the autostart checkbox is ticked."""
+        """Checks if autostart is enabled and triggers the start sequence."""
         if self.autostart_var.get():
             delay_sec = self.startup_delay_var.get()
             if is_autostart and delay_sec > 0:
@@ -1297,7 +1290,7 @@ class BridgeInstanceController:
             ToastNotification(
                 title=translate("Delete Files"),
                 message=translate("Files not found."),
-                bootstyle=INFO,
+                bootstyle=SUCCESS, # Changed to success/info style as it's just info
                 duration=3000,
             ).show_toast()
             return False

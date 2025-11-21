@@ -4,9 +4,6 @@
 Contains the Controller (logic and state) for the KaspaNodeTab (View).
 This file handles all business logic, state management, and subprocess
 interactions for the kaspad node.
-
-UPDATED: Restored missing 'apply_and_restart_node' method.
-Includes Active Port Health Check (Watchdog) & Force UI Reset logic.
 """
 
 from __future__ import annotations
@@ -22,12 +19,12 @@ import sys
 import threading
 import time
 import tkinter as tk
-from tkinter import DISABLED, END, NORMAL, filedialog, messagebox
+from tkinter import filedialog, messagebox
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, cast
 
 import psutil
 import ttkbootstrap as ttk
-from ttkbootstrap.constants import DANGER, INFO, SUCCESS, X
+from ttkbootstrap.constants import DANGER, SUCCESS
 from ttkbootstrap.toast import ToastNotification
 
 from src.config.config import CONFIG
@@ -46,8 +43,8 @@ if sys.platform == "win32":
         from ctypes import wintypes
     except ImportError:
         logging.error("ctypes or wintypes not found. Job Object support disabled.")
-        ctypes = None
-        wintypes = None
+        ctypes = None  # type: ignore
+        wintypes = None  # type: ignore
 else:
     ctypes = None
     wintypes = None
@@ -260,13 +257,16 @@ class KaspaNodeController:
                     if key in ip_port_keys and validate_ip_port(saved_value):
                         ip, port = validate_ip_port(saved_value)
                         val1_var.set(ip)
-                        if val2_var: val2_var.set(port)
+                        if val2_var:
+                            val2_var.set(port)
                     else:
                         val1_var.set(saved_value)
-                        if val2_var: val2_var.set(default_val2)
+                        if val2_var:
+                            val2_var.set(default_val2)
                 else:
                     val1_var.set(default_val1)
-                    if val2_var: val2_var.set(default_val2)
+                    if val2_var:
+                        val2_var.set(default_val2)
 
         self.view.after(100, self.update_command_preview)
 
@@ -342,7 +342,7 @@ class KaspaNodeController:
             if hasattr(self.view, "command_preview_text"):
                 try:
                     self.view.command_preview_text.text.config(state="normal")
-                    self.view.command_preview_text.text.delete("1.0", END)
+                    self.view.command_preview_text.text.delete("1.0", tk.END)
                     self.view.command_preview_text.text.insert("1.0", command_str)
                     self.view.command_preview_text.text.config(state="disabled")
                 except tk.TclError:
@@ -379,7 +379,8 @@ class KaspaNodeController:
         ToastNotification(title=translate("Success"), message=translate("Node options have been reset to default."), bootstyle=SUCCESS, duration=3000).show_toast()
 
     def _on_check_toggle(self, key: str) -> None:
-        if key not in self.option_vars: return
+        if key not in self.option_vars:
+            return
         item_tuple = self.option_vars[key]
         check_var = item_tuple[0]
         is_checked = check_var.get()
@@ -401,7 +402,8 @@ class KaspaNodeController:
                     port_entry.config(state=state)
                     label.config(bootstyle=boot)
                     colon_label.config(bootstyle=boot)
-            except (tk.TclError, IndexError): pass
+            except (tk.TclError, IndexError):
+                pass
         self._save_and_update_preview()
 
     def _update_all_entry_states(self) -> None:
@@ -426,7 +428,8 @@ class KaspaNodeController:
                         port_entry.config(state=state)
                         label.config(bootstyle=boot)
                         colon_label.config(bootstyle=boot)
-                except (tk.TclError, IndexError): pass
+                except (tk.TclError, IndexError):
+                    pass
 
     def _browse_file(self, var: ttk.StringVar, title: str, filetypes: List[Tuple[str, str]]) -> None:
         path = filedialog.askopenfilename(title=translate(title), filetypes=filetypes)
@@ -435,17 +438,22 @@ class KaspaNodeController:
             self._save_and_update_preview()
 
     def _update_update_button_logic(self, *args: Any) -> None:
-        if not hasattr(self.view, "update_button"): return
+        if not hasattr(self.view, "update_button"):
+            return
         self.update_command_preview()
         is_running = bool(self.node_process and self.node_process.poll() is None)
         file_exists = os.path.exists(self.node_exe_path)
         is_custom_url = self.use_custom_url_var.get()
         is_custom_exe = self.use_custom_exe_var.get()
 
-        if is_custom_exe: text = "Update Node"
-        elif is_custom_url: text = "Download File"
-        elif not file_exists: text = "Download Node"
-        else: text = "Update Node"
+        if is_custom_exe:
+            text = "Update Node"
+        elif is_custom_url:
+            text = "Download File"
+        elif not file_exists:
+            text = "Download Node"
+        else:
+            text = "Update Node"
         self.view.update_button.config(text=translate(text))
 
         is_app_busy = self.main_window.transaction_manager.is_fetching or self.main_window.is_exporting or self.is_updating
@@ -455,14 +463,16 @@ class KaspaNodeController:
 
     def _on_custom_exe_toggled(self, *args: Any) -> None:
         self._toggle_entry_state(self.use_custom_exe_var, [self.view.exe_entry, self.view.exe_browse])
-        if self.use_custom_exe_var.get(): self.use_custom_url_var.set(False)
+        if self.use_custom_exe_var.get():
+            self.use_custom_url_var.set(False)
         self._save_and_update_preview()
         is_active = not (self.main_window.transaction_manager.is_fetching or self.main_window.is_exporting)
         self.set_controls_state(is_active)
 
     def _on_custom_url_toggled(self, *args: Any) -> None:
         self._toggle_entry_state(self.use_custom_url_var, [self.view.url_entry, self.view.url_path_label, self.view.url_path_entry])
-        if self.use_custom_url_var.get(): self.use_custom_exe_var.set(False)
+        if self.use_custom_url_var.get():
+            self.use_custom_exe_var.set(False)
         self._save_and_update_preview()
         is_active = not (self.main_window.transaction_manager.is_fetching or self.main_window.is_exporting)
         self.set_controls_state(is_active)
@@ -471,8 +481,10 @@ class KaspaNodeController:
         new_state = "normal" if enabled_var.get() else "disabled"
         for entry in entries:
             try:
-                if entry.winfo_exists(): entry.config(state=new_state)
-            except tk.TclError: pass
+                if entry.winfo_exists():
+                    entry.config(state=new_state)
+            except tk.TclError:
+                pass
 
     def _prompt_for_download_path_and_start(self) -> None:
         default_path = self.bin_dir or os.getcwd()
@@ -481,8 +493,10 @@ class KaspaNodeController:
         user_choice = messagebox.askyesnocancel(translate("Update Node"), msg_template)
         
         chosen_path = None
-        if user_choice is True: chosen_path = default_path
-        elif user_choice is False: chosen_path = filedialog.askdirectory(title=translate("Select Download Location"), initialdir=default_path)
+        if user_choice is True:
+            chosen_path = default_path
+        elif user_choice is False:
+            chosen_path = filedialog.askdirectory(title=translate("Select Download Location"), initialdir=default_path)
         else: 
             self._update_update_button_logic()
             return
@@ -574,7 +588,8 @@ class KaspaNodeController:
                 else:
                     with open(version_file_path, "r", encoding="utf-8") as f:
                         version = f.read().strip()
-                    if not version: version = translate("Unknown")
+                    if not version:
+                        version = translate("Unknown")
                     local_version = f"{translate('Local Version')}: {version}"
             except Exception as e:
                 logger.error(f"Failed to read local kaspad version file: {_sanitize_for_logging(e)}")
@@ -598,7 +613,8 @@ class KaspaNodeController:
 
     def _delayed_activation_check(self) -> None:
         try:
-            if not self.view.winfo_exists(): return
+            if not self.view.winfo_exists():
+                return
             self.update_command_preview()
             self._update_update_button_logic()
             file_exists = os.path.exists(self.node_exe_path)
@@ -608,42 +624,57 @@ class KaspaNodeController:
                 self._prompt_for_download_path_and_start()
 
             self._check_local_kaspad_version(prompt_if_missing=False)
-        except tk.TclError: pass
-        except Exception as e: logger.error(f"Error during delayed activation check: {e}")
+        except tk.TclError:
+            pass
+        except Exception as e:
+            logger.error(f"Error during delayed activation check: {e}")
 
     def log_message(self, message: str, level: str = "INFO") -> None:
         try:
             if self.view.winfo_exists() and hasattr(self.view, "log_pane_component"):
                 self.main_window.after(0, self.view.log_pane_component.insert_line, f"{_sanitize_for_logging(message.strip())}\n", level)
-        except (tk.TclError, RuntimeError): pass
+        except (tk.TclError, RuntimeError):
+            pass
 
     def read_output(self, pipe: Any) -> None:
         try:
             with pipe:
                 for line in iter(pipe.readline, b""):
                     try:
-                        if not self.view.winfo_exists(): break
+                        if not self.view.winfo_exists():
+                            break
                         line_str = line.decode("utf-8", errors="ignore")
-                        if not line_str.strip(): continue
+                        if not line_str.strip():
+                            continue
                         
                         log_level = "INFO"
-                        if "[TRACE" in line_str: log_level = "TRACE"
-                        elif "[DEBUG" in line_str: log_level = "DEBUG"
-                        elif "[WARN" in line_str: log_level = "WARN"
-                        elif "[ERROR" in line_str: log_level = "ERROR"
-                        elif "[FATAL" in line_str: log_level = "FATAL"
+                        if "[TRACE" in line_str:
+                            log_level = "TRACE"
+                        elif "[DEBUG" in line_str:
+                            log_level = "DEBUG"
+                        elif "[WARN" in line_str:
+                            log_level = "WARN"
+                        elif "[ERROR" in line_str:
+                            log_level = "ERROR"
+                        elif "[FATAL" in line_str:
+                            log_level = "FATAL"
 
                         self.log_message(line_str, log_level)
-                    except (tk.TclError, RuntimeError): break
+                    except (tk.TclError, RuntimeError):
+                        break
         except Exception as e:
              if "Bad file descriptor" not in str(e) and "most likely because it was closed" not in str(e):
                  try:
-                     if self.view.winfo_exists(): self.log_message(f"Error reading process output: {e}", "ERROR")
-                 except (tk.TclError, RuntimeError): pass
+                     if self.view.winfo_exists():
+                         self.log_message(f"Error reading process output: {e}", "ERROR")
+                 except (tk.TclError, RuntimeError):
+                     pass
         finally:
             try:
-                if self.view.winfo_exists(): self.main_window.after(0, self.on_process_exit)
-            except (tk.TclError, RuntimeError): pass
+                if self.view.winfo_exists():
+                    self.main_window.after(0, self.on_process_exit)
+            except (tk.TclError, RuntimeError):
+                pass
 
     def build_args_from_settings(self) -> List[str]:
         args = [self.node_exe_path]
@@ -653,14 +684,17 @@ class KaspaNodeController:
             netsuffix_check, netsuffix_val, *_ = self.option_vars["netsuffix"]
             if netsuffix_check.get() and isinstance(netsuffix_val, ttk.StringVar) and sanitize_cli_arg(netsuffix_val.get()):
                 args.append(f"--netsuffix={sanitize_cli_arg(netsuffix_val.get())}")
-        elif net == "devnet": args.append("--devnet")
-        elif net == "simnet": args.append("--simnet")
+        elif net == "devnet":
+            args.append("--devnet")
+        elif net == "simnet":
+            args.append("--simnet")
 
         if self.loglevel_var.get() != "info":
             args.append(f"--loglevel={self.loglevel_var.get()}")
 
         for key, item_tuple in self.option_vars.items():
-            if key == "netsuffix" and net == "testnet": continue
+            if key == "netsuffix" and net == "testnet":
+                continue
             check_var = item_tuple[0]
             if check_var.get():
                 if len(item_tuple) > 1 and isinstance(item_tuple[1], ttk.StringVar):
@@ -671,8 +705,10 @@ class KaspaNodeController:
                     value = val1_value
                     if val1_value or val2_value:
                         value = f"{val1_value}:{val2_value}" if val2_value else val1_value
-                    if value: args.append(f"--{key}={value}")
-                else: args.append(f"--{key}")
+                    if value:
+                        args.append(f"--{key}={value}")
+                else:
+                    args.append(f"--{key}")
         return args
 
     def _get_rpc_port(self) -> str:
@@ -682,20 +718,27 @@ class KaspaNodeController:
             val1_var = rpc_vars[1]
             val2_var = rpc_vars[2] if len(rpc_vars) > 2 else None
             if check_var.get():
-                 if val2_var: return val2_var.get().strip()
+                 if val2_var:
+                     return val2_var.get().strip()
                  elif val1_var:
                      parts = val1_var.get().split(":")
-                     if len(parts) > 1: return parts[-1].strip()
+                     if len(parts) > 1:
+                         return parts[-1].strip()
         net = self.network_var.get()
-        if net == "testnet": return "16210"
-        if net == "devnet": return "16610"
-        if net == "simnet": return "16510"
+        if net == "testnet":
+            return "16210"
+        if net == "devnet":
+            return "16610"
+        if net == "simnet":
+            return "16510"
         return "16110"
 
     def _check_node_health(self) -> bool:
         rpc_port_str = self._get_rpc_port()
-        try: port = int(rpc_port_str)
-        except ValueError: return True 
+        try:
+            port = int(rpc_port_str)
+        except ValueError:
+            return True 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(2.0) 
         result = sock.connect_ex(('127.0.0.1', port))
@@ -706,8 +749,10 @@ class KaspaNodeController:
         failures = 0
         while not self.watchdog_stop_event.is_set():
             time.sleep(30)
-            if not self.node_process: continue
-            if self.node_process.poll() is not None: continue 
+            if not self.node_process:
+                continue
+            if self.node_process.poll() is not None:
+                continue 
 
             is_alive = self._check_node_health()
             if is_alive:
@@ -728,6 +773,12 @@ class KaspaNodeController:
                     self.start_node(is_autostart=False)
                     failures = 0
 
+    def autostart_if_enabled(self) -> None:
+        """Starts the node if autostart is enabled in settings."""
+        if self.autostart_var.get():
+            logger.info("Autostart enabled for Node. Starting...")
+            self.view.after(2000, lambda: self.start_node(is_autostart=True))
+
     def start_node(self, is_autostart: bool = False) -> None:
         if self.node_process and self.node_process.poll() is None:
             self.log_message(f"{translate('Node is already running.')}", "WARN")
@@ -738,7 +789,8 @@ class KaspaNodeController:
         if self.external_process_pid:
             msg = f"External kaspad.exe found (PID: {self.external_process_pid}). Stop it to run the node here."
             self.log_message(msg, "ERROR")
-            if not is_autostart: messagebox.showerror(translate("Error"), translate(msg))
+            if not is_autostart:
+                messagebox.showerror(translate("Error"), translate(msg))
             return
 
         command_list = []
@@ -752,18 +804,22 @@ class KaspaNodeController:
             try:
                 first_space_index = command_str_from_box.index(" ")
                 args_str = command_str_from_box[first_space_index:].strip()
-                if args_str: command_list.extend(shlex.split(args_str))
-            except ValueError: pass
+                if args_str:
+                    command_list.extend(shlex.split(args_str))
+            except ValueError:
+                pass
             command_str = " ".join(command_list)
         except Exception as e:
             self.log_message(f"Error parsing command: {e}", "ERROR")
-            if not is_autostart: messagebox.showerror(translate("Invalid Input"), f"Could not parse command: {e}")
+            if not is_autostart:
+                messagebox.showerror(translate("Invalid Input"), f"Could not parse command: {e}")
             return
 
         exe_name = os.path.basename(exe_path_to_check).lower()
         if exe_name in ["cmd.exe", "powershell.exe", "pwsh.exe", "bash.exe", "sh.exe"]:
             self.log_message("Error: Executable cannot be a system shell.", "ERROR")
-            if not is_autostart: messagebox.showerror(translate("Invalid Input"), translate("Selected executable is a blocked system shell."))
+            if not is_autostart:
+                messagebox.showerror(translate("Invalid Input"), translate("Selected executable is a blocked system shell."))
             return
 
         if not os.path.isfile(exe_path_to_check):
@@ -775,7 +831,8 @@ class KaspaNodeController:
                 msg = f"{translate('Error')}: {translate('File not found')}:\n{_sanitize_for_logging(exe_path_to_check)}\n{translate('Please update the node first using the ''Update Node'' button.')}"
                 self.log_message(msg, "ERROR")
                 self._update_update_button_logic()
-                if not is_autostart: messagebox.showerror(translate("Error"), f"{translate('File not found')}: {exe_path_to_check}. {translate('Please update the node first using the ''Update Node'' button.')}")
+                if not is_autostart:
+                    messagebox.showerror(translate("Error"), f"{translate('File not found')}: {exe_path_to_check}. {translate('Please update the node first using the ''Update Node'' button.')}")
                 return
 
         self.node_exe_path = exe_path_to_check
@@ -787,10 +844,13 @@ class KaspaNodeController:
                 arg_key = arg.split("=")[0]
                 if arg_key in ip_port_args:
                     value = ""
-                    if "=" in arg: value = arg.split("=", 1)[1]
-                    elif i + 1 < len(command_list): value = command_list[i + 1]
+                    if "=" in arg:
+                        value = arg.split("=", 1)[1]
+                    elif i + 1 < len(command_list):
+                        value = command_list[i + 1]
                     if value and not validate_ip_port(value) and not ipv6_pattern.match(value):
-                        if not is_autostart: messagebox.showerror(translate("Invalid Input"), f"{translate('Invalid Input')}: {arg_key}. {translate('Example')}: 127.0.0.1:16110, :16110, or [::1]:16110")
+                        if not is_autostart:
+                            messagebox.showerror(translate("Invalid Input"), f"{translate('Invalid Input')}: {arg_key}. {translate('Example')}: 127.0.0.1:16110, :16110, or [::1]:16110")
                         return
 
             self.log_message(f"--- {translate('Starting Node')} ---", "INFO")
@@ -820,10 +880,13 @@ class KaspaNodeController:
                         if h_process:
                             if ctypes.windll.kernel32.AssignProcessToJobObject(job_handle, h_process):
                                 logger.info(f"Successfully assigned kaspad process (PID: {process_pid}) to Job Object.")
-                            else: logger.error(f"Failed to assign kaspad process to Job Object. Error: {ctypes.windll.kernel32.GetLastError()}")
+                            else:
+                                logger.error(f"Failed to assign kaspad process to Job Object. Error: {ctypes.windll.kernel32.GetLastError()}")
                             ctypes.windll.kernel32.CloseHandle(h_process)
-                        else: logger.error(f"Failed to open kaspad process to get handle. Error: {ctypes.windll.kernel32.GetLastError()}")
-                    except Exception as e: logger.error(f"Failed to assign kaspad process to Job Object: {e}", exc_info=True)
+                        else:
+                            logger.error(f"Failed to open kaspad process to get handle. Error: {ctypes.windll.kernel32.GetLastError()}")
+                    except Exception as e:
+                        logger.error(f"Failed to assign kaspad process to Job Object: {e}", exc_info=True)
 
             threading.Thread(target=self.read_output, args=(self.node_process.stdout,), daemon=True).start()
             
@@ -842,25 +905,34 @@ class KaspaNodeController:
             self.node_process = None
 
     def on_process_exit(self) -> None:
-        if not self.node_process: return
+        if not self.node_process:
+            return
         if self.node_process.poll() is None:
             try:
-                if psutil.pid_exists(self.node_process.pid): return
-            except: pass
+                if psutil.pid_exists(self.node_process.pid):
+                    return
+            except Exception:
+                pass
 
         self.running_command_str = ""
         try:
             self.log_message(f"\n--- {translate('Process Terminated')} ---", "WARN")
-            if self.view.start_button.winfo_exists(): self.view.start_button.config(state="normal")
-            if self.view.stop_button.winfo_exists(): self.view.stop_button.config(state="disabled")
-            if self.view.apply_restart_button.winfo_exists(): self.view.apply_restart_button.config(state="disabled")
-        except (tk.TclError, RuntimeError): pass
+            if self.view.start_button.winfo_exists():
+                self.view.start_button.config(state="normal")
+            if self.view.stop_button.winfo_exists():
+                self.view.stop_button.config(state="disabled")
+            if self.view.apply_restart_button.winfo_exists():
+                self.view.apply_restart_button.config(state="disabled")
+        except (tk.TclError, RuntimeError):
+            pass
 
         self.node_process = None
 
         try:
-            if self.view.winfo_exists(): self.view.after(0, self.set_controls_state, True)
-        except (tk.TclError, RuntimeError): pass
+            if self.view.winfo_exists():
+                self.view.after(0, self.set_controls_state, True)
+        except (tk.TclError, RuntimeError):
+            pass
 
         if self.auto_restart_var.get() and not self._stop_requested:
             self.log_message("Node stopped unexpectedly. Restarting in 5 seconds...", "WARN")
@@ -898,18 +970,23 @@ class KaspaNodeController:
                 parent = psutil.Process(self.node_process.pid)
                 children = parent.children(recursive=True)
                 for child in children:
-                    try: child.terminate()
-                    except psutil.NoSuchProcess: pass
+                    try:
+                        child.terminate()
+                    except psutil.NoSuchProcess:
+                        pass
                 self.node_process.terminate()
                 psutil.wait_procs(children, timeout=3)
             except psutil.NoSuchProcess:
                 self.log_message(translate("Node is not running."), "WARN")
             except Exception as e:
                 self.log_message(f"Error while stopping node: {_sanitize_for_logging(e)}", "ERROR")
+        
             finally:
                 try:
-                    if self.view.winfo_exists(): self.on_process_exit()
-                except tk.TclError: pass
+                    if self.view.winfo_exists():
+                        self.on_process_exit()
+                except tk.TclError:
+                    pass
         else:
             self.log_message(f"{translate('Node is not running.')}", "WARN")
             self.on_process_exit()
@@ -921,7 +998,8 @@ class KaspaNodeController:
         is_running = bool(self.node_process and self.node_process.poll() is None)
         is_active = active
         try:
-            if not hasattr(self.view, "start_button"): return
+            if not hasattr(self.view, "start_button"):
+                return
             if self.is_updating:
                 self.view.start_button.config(state="disabled")
                 self.view.stop_button.config(state="disabled")
@@ -938,7 +1016,8 @@ class KaspaNodeController:
             try:
                 new_command = self.command_preview_var.get().strip()
                 self.view.apply_restart_button.config(state="normal" if is_running and is_active and new_command != self.running_command_str else "disabled")
-            except tk.TclError: self.view.apply_restart_button.config(state="disabled")
+            except tk.TclError:
+                self.view.apply_restart_button.config(state="disabled")
 
             self._update_update_button_logic(is_active)
             self.view.reset_button.config(state="normal" if (active and not is_running) else "disabled")
@@ -955,12 +1034,14 @@ class KaspaNodeController:
             else:
                 self._toggle_entry_state(ttk.BooleanVar(value=False), [self.view.exe_entry, self.view.exe_browse])
                 self._toggle_entry_state(ttk.BooleanVar(value=False), [self.view.url_entry, self.view.url_path_label, self.view.url_path_entry])
-        except tk.TclError: pass
+        except tk.TclError:
+            pass
 
-    # ... (Keeping other helper methods unchanged for brevity as they are standard) ...
     def _get_default_appdir(self) -> str:
-        if platform.system() == "Windows": return os.path.join(os.environ.get("LOCALAPPDATA", ""), "Kaspad")
-        elif platform.system() == "Darwin": return os.path.join(os.environ.get("HOME", ""), "Library", "Application Support", "Kaspad")
+        if platform.system() == "Windows":
+            return os.path.join(os.environ.get("LOCALAPPDATA", ""), "Kaspad")
+        elif platform.system() == "Darwin":
+            return os.path.join(os.environ.get("HOME", ""), "Library", "Application Support", "Kaspad")
         return os.path.join(os.environ.get("HOME", ""), ".kaspad")
 
     def _get_folder_size(self, folder_path: str) -> int:
@@ -969,8 +1050,10 @@ class KaspaNodeController:
             for dp, _, fn in os.walk(folder_path):
                 for f in fn:
                     fp = os.path.join(dp, f)
-                    if not os.path.islink(fp): total += os.path.getsize(fp)
-        except: return -1
+                    if not os.path.islink(fp):
+                        total += os.path.getsize(fp)
+        except Exception:
+            return -1
         return total
 
     def update_db_size(self) -> None:
@@ -980,10 +1063,9 @@ class KaspaNodeController:
             threading.Thread(target=self._get_db_size_worker, daemon=True).start()
 
     def _get_db_size_worker(self) -> None:
-        # (Existing logic for size calculation - standard implementation)
-        # Simplified for brevity in this fix snippet, assumes standard implementation exists
-        size_str = "Unknown" 
-        # ... implementation ...
+        # Placeholder logic for DB size calculation
+        size_str = "Unknown"
+        # Implementation specific to DB structure would go here
         if self.view.winfo_exists():
             self.view.after(0, lambda: self.view.db_size_label.config(text=f"{translate('DB Size')}: {size_str}"))
             self.view.after(0, lambda: self.view.db_size_button.config(state=NORMAL))
@@ -994,7 +1076,6 @@ class KaspaNodeController:
             self.view.log_pane_component._on_font_size_change()
         self._save_settings()
     
-    # ... (Existing helper methods like check_external_process, etc.) ...
     def _check_for_external_process(self) -> None:
         self.external_process_pid = None
         my_pid = self.node_process.pid if self.node_process else None
@@ -1003,7 +1084,8 @@ class KaspaNodeController:
                 if proc.name().lower() == "kaspad.exe" and proc.pid != my_pid:
                     self.external_process_pid = proc.pid
                     break
-        except: pass
+        except Exception:
+            pass
         self._update_external_process_ui()
 
     def _update_external_process_ui(self) -> None:
@@ -1012,17 +1094,20 @@ class KaspaNodeController:
                 msg = translate("External kaspad.exe found (PID: {}). Stop it to run the node here.").format(self.external_process_pid)
                 self.view.external_process_label.config(text=msg)
                 self.view.external_process_frame.pack(fill=X, expand=True, pady=(5, 0), ipady=5)
-            else: self.view.external_process_frame.pack_forget()
-        except: pass
+            else:
+                self.view.external_process_frame.pack_forget()
+        except Exception:
+            pass
 
     def stop_external_node(self) -> None:
         if self.external_process_pid and messagebox.askyesno(translate("Confirm Stop"), translate("Are you sure you want to stop the external kaspad process (PID: {})?").format(self.external_process_pid)):
             try:
                 psutil.Process(self.external_process_pid).terminate()
                 self.log_message(f"Terminated external process {self.external_process_pid}.", "INFO")
-            except: pass
+            except Exception:
+                pass
             self.view.after(500, self._check_for_external_process)
 
     def _delete_node_files(self) -> None:
-        # (Standard deletion logic)
+        # Placeholder for file deletion logic
         pass

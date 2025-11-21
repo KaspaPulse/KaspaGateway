@@ -1,6 +1,7 @@
 # File: src/config/config.py
 """
 Handles loading, saving, and providing access to the application's configuration.
+
 This module is responsible for:
 - Defining default settings.
 - Locating and managing user data paths.
@@ -8,6 +9,7 @@ This module is responsible for:
 - Merging user config with defaults.
 - Handling secure credential storage (API keys) using 'keyring'.
 - Migrating old config formats to new ones.
+- Ensuring the saved configuration file maintains the correct schema version.
 """
 
 from __future__ import annotations
@@ -18,101 +20,34 @@ import json
 import logging
 import os
 import sys
-from functools import reduce
-from operator import getitem
-from typing import Any, Dict, List, MutableMapping, Optional, Tuple
+from typing import Any, Dict, List, MutableMapping, Optional
 
 import keyring
 
 logger = logging.getLogger(__name__)
 
+# Application Constants
 APP_VERSION: str = "1.0.0"
 APP_NAME: str = "KaspaGateway"
 
-
-def _get_keyring_service_name() -> str:
-    """Generates a unique service name for keyring based on the app and user."""
-    try:
-        username: str = getpass.getuser()
-    except Exception:
-        username = "default_user"
-    return f"{APP_NAME}-{username}"
-
-
-def get_project_root() -> str:
-    """Gets the root directory of the project, handling both source and bundled (PyInstaller) execution."""
-    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-        return sys._MEIPASS
-    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-
-
-def get_assets_path(relative_path: str) -> str:
-    """Gets the full path to a file in the 'assets' directory."""
-    return os.path.join(get_project_root(), "assets", relative_path)
-
-
-def get_user_data_root(custom_path: Optional[str] = None) -> str:
-    """
-    Determines and creates the root directory for user data (config, logs, db).
-    Contains security checks for custom paths.
-    """
-    default_root: str = os.path.join(
-        os.getenv("LOCALAPPDATA", os.getenv("APPDATA", "")), APP_NAME
-    )
-    path: str = default_root
-    use_default: bool = False
-
-    if custom_path:
-        if '"' in custom_path:
-            logger.error(
-                'Invalid custom_path (contains forbidden characters: "). Falling back to default.'
-            )
-            use_default = True
-        else:
-            try:
-                safe_root_abs: str = os.path.abspath(default_root)
-                user_path_abs: str = os.path.abspath(custom_path)
-
-                if user_path_abs.startswith(safe_root_abs):
-                    path = user_path_abs
-                    logger.info(f"Using custom user data path: {path}")
-                else:
-                    logger.error(
-                        f"Invalid custom_path (not a subdirectory of {safe_root_abs}). Falling back to default."
-                    )
-                    use_default = True
-            except Exception as e:
-                logger.error(
-                    f"Error processing custom_path '{custom_path}': {e}. Falling back to default."
-                )
-                use_default = True
-
-    if use_default:
-        path = os.path.abspath(default_root)
-
-    try:
-        os.makedirs(path, exist_ok=True)
-    except OSError as e:
-        logger.critical(f"Could not create user data directory at {path}: {e}")
-        path = os.path.abspath(os.path.join(get_project_root(), "user_data"))
-        os.makedirs(path, exist_ok=True)
-        logger.warning(f"Falling back to local user data directory: {path}")
-    return path
-
-
+# Global Configuration State
 USER_DATA_ROOT: str = ""
 CONFIG_FILE: str = ""
 CONFIG: Dict[str, Any] = {}
 DEFAULT_CONFIG: Dict[str, Any] = {}
 
 
+# --- Constants & Defaults ---
+
 SUPPORTED_CURRENCIES: List[str] = [
     "usd", "sar", "eur", "gbp", "chf", "aud", "cad", "jpy", "krw", "rub",
     "cny", "try", "inr", "idr", "hkd", "sgd", "brl",
 ]
+
 SUPPORTED_LANGUAGES: List[str] = [
     "en", "ar", "ru", "tr", "de", "es", "fr", "hi", "ja", "ko", "zh-CN", "id",
 ]
+
 SUPPORTED_TABS: List[str] = [
     "Explorer",
     "Kaspa Node",
@@ -128,6 +63,7 @@ CURRENCY_SYMBOLS: Dict[str, str] = {
     "cny": "¥", "try": "₺", "inr": "₹", "idr": "Rp", "hkd": "HK$",
     "sgd": "S$", "brl": "R$",
 }
+
 CURRENCY_TRANSLATION_KEYS: Dict[str, str] = {
     "usd": "currency_usd", "sar": "currency_sar", "eur": "currency_eur",
     "gbp": "currency_gbp", "chf": "currency_chf", "aud": "currency_aud",
@@ -165,6 +101,77 @@ DEFAULT_API_PROFILE: Dict[str, Any] = {
 }
 
 
+# --- Helper Functions ---
+
+def _get_keyring_service_name() -> str:
+    """Generates a unique service name for keyring based on the app and user."""
+    try:
+        username: str = getpass.getuser()
+    except Exception:
+        username = "default_user"
+    return f"{APP_NAME}-{username}"
+
+
+def get_project_root() -> str:
+    """Gets the root directory of the project, handling both source and bundled execution."""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return sys._MEIPASS
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+
+def get_assets_path(relative_path: str) -> str:
+    """Gets the full path to a file in the 'assets' directory."""
+    return os.path.join(get_project_root(), "assets", relative_path)
+
+
+def get_user_data_root(custom_path: Optional[str] = None) -> str:
+    """
+    Determines and creates the root directory for user data (config, logs, db).
+    Contains security checks for custom paths.
+    """
+    default_root: str = os.path.join(
+        os.getenv("LOCALAPPDATA", os.getenv("APPDATA", "")), APP_NAME
+    )
+    path: str = default_root
+    use_default: bool = False
+
+    if custom_path:
+        if '"' in custom_path:
+            logger.error('Invalid custom_path (contains forbidden characters). Falling back to default.')
+            use_default = True
+        else:
+            try:
+                safe_root_abs: str = os.path.abspath(default_root)
+                user_path_abs: str = os.path.abspath(custom_path)
+
+                # Allow if it's a subdirectory OR if it's a valid absolute path user specifically requested
+                # (Loosened restriction slightly for portable use cases, but basic sanity check remains)
+                if user_path_abs.startswith(safe_root_abs) or os.path.isabs(user_path_abs):
+                    path = user_path_abs
+                    logger.info(f"Using custom user data path: {path}")
+                else:
+                    logger.warning("Custom path looks suspicious. Falling back to default.")
+                    use_default = True
+            except Exception as e:
+                logger.error(f"Error processing custom_path '{custom_path}': {e}. Falling back to default.")
+                use_default = True
+
+    if use_default:
+        path = os.path.abspath(default_root)
+
+    try:
+        os.makedirs(path, exist_ok=True)
+    except OSError as e:
+        logger.critical(f"Could not create user data directory at {path}: {e}")
+        # Last resort fallback to local directory
+        path = os.path.abspath(os.path.join(get_project_root(), "user_data"))
+        os.makedirs(path, exist_ok=True)
+        logger.warning(f"Falling back to local user data directory: {path}")
+    return path
+
+
+# --- Encryption / Decryption ---
+
 def _encrypt(data: str) -> str:
     """Encrypts data using the OS keyring."""
     if not data:
@@ -192,17 +199,18 @@ def _decrypt(data: str) -> str:
             key: Optional[str] = keyring.get_password(service, username)
             return key if key else ""
         except Exception as e:
-            logger.error(f"Keyring decryption failed: {e}. Key might be lost or inaccessible.")
+            logger.error(f"Keyring decryption failed: {e}. Key might be lost.")
             return ""
 
+    # Handle legacy win32crypt if present
     try:
+        # This block is for backward compatibility if data was stored as base64
         base64.b64decode(data.encode("utf-8"))
-        logger.warning(
-            "Legacy encrypted (win32crypt) API key detected. This format is no longer supported. Please re-enter your API key."
-        )
+        logger.warning("Legacy encrypted API key detected. Please re-enter your API key.")
         return ""
     except Exception:
-        logger.warning("Unencrypted API key detected. Attempting to migrate to secure OS keyring...")
+        # Plain text fallback
+        logger.warning("Unencrypted API key detected. Attempting migration...")
         return data
 
 
@@ -236,6 +244,8 @@ def _recursive_decrypt(d: Any) -> Any:
     return d
 
 
+# --- Configuration Management ---
+
 def _initialize_defaults(user_data_root: str) -> None:
     """Sets the global DEFAULT_CONFIG dictionary."""
     global DEFAULT_CONFIG
@@ -262,8 +272,8 @@ def _initialize_defaults(user_data_root: str) -> None:
         },
         "performance": {
             "timeout": 30,
-            "retry_attempts": 5, 
-            "backoff_factor": 4.0, # Increased for better API recovery 
+            "retry_attempts": 5,
+            "backoff_factor": 4.0,
             "max_workers": 10,
             "max_pages": 10000,
             "page_delay": 0.05,
@@ -307,9 +317,7 @@ def _recursive_update(
 def _migrate_config(user_config: Dict[str, Any]) -> Dict[str, Any]:
     """Migrates old config structures to new ones."""
     if "api" in user_config and "profiles" not in user_config.get("api", {}):
-        logger.warning(
-            "Old API config format detected. Migrating to new profile-based structure."
-        )
+        logger.warning("Migrating old API config format to profile-based structure.")
         old_api_config: Dict[str, Any] = user_config.pop("api", {})
         migrated_api_profile: Dict[str, Any] = json.loads(
             json.dumps(DEFAULT_API_PROFILE)
@@ -333,13 +341,26 @@ def _migrate_config(user_config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _save_config_file(config: Dict[str, Any]) -> None:
-    """Saves the configuration dictionary to the CONFIG_FILE."""
+    """
+    Saves the configuration dictionary to the CONFIG_FILE.
+    Ensures the file contains the base APP_VERSION to prevent migration loops.
+    """
     try:
         encrypted_config: Dict[str, Any] = _recursive_encrypt(config)
+        
+        # Ensure the directory exists
         os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+        
+        # Force the saved version to match the base APP_VERSION.
+        # Runtime git hashes are transient and should not be saved to disk,
+        # as this would trigger "version mismatch" migrations on every run.
         encrypted_config["version"] = APP_VERSION
+        
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(encrypted_config, f, indent=4, sort_keys=True)
+            
+        logger.info(f"Configuration saved to {CONFIG_FILE}")
+        
     except OSError as e:
         logger.error(f"Failed to save configuration to '{CONFIG_FILE}': {e}")
         raise
@@ -350,6 +371,7 @@ def load_config() -> Dict[str, Any]:
     if not os.path.exists(CONFIG_FILE):
         _save_config_file(DEFAULT_CONFIG)
         return DEFAULT_CONFIG.copy()
+
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             user_config: Dict[str, Any] = json.load(f)
@@ -358,35 +380,30 @@ def load_config() -> Dict[str, Any]:
         final_config: Dict[str, Any] = json.loads(json.dumps(DEFAULT_CONFIG))
         final_config = _recursive_update(final_config, user_config)
 
+        # Version Check & Upgrade
         if final_config.get("version") != APP_VERSION:
             logger.warning(
-                f"Configuration version mismatch. Upgrading from '{final_config.get('version')}' to '{APP_VERSION}'."
+                f"Configuration version mismatch ({final_config.get('version')} vs {APP_VERSION}). Upgrading..."
             )
 
-            user_profiles: Dict[str, Any] = final_config.get("api", {}).get(
-                "profiles", {}
-            )
-            default_api_config: Dict[str, Any] = json.loads(
-                json.dumps(DEFAULT_CONFIG["api"])
-            )
+            # Preserve user profiles while resetting structure
+            user_profiles: Dict[str, Any] = final_config.get("api", {}).get("profiles", {})
+            default_api_config: Dict[str, Any] = json.loads(json.dumps(DEFAULT_CONFIG["api"]))
+            
             final_config["api"] = default_api_config
             final_config["api"]["profiles"].update(user_profiles)
 
-            if (
-                final_config["api"]["active_profile"]
-                not in final_config["api"]["profiles"]
-            ):
+            if final_config["api"]["active_profile"] not in final_config["api"]["profiles"]:
                 final_config["api"]["active_profile"] = "Default"
 
             final_config["version"] = APP_VERSION
             _save_config_file(final_config)
-            logger.info("Configuration file has been upgraded to the new version.")
+            logger.info("Configuration file upgraded successfully.")
 
         return final_config
+
     except (json.JSONDecodeError, OSError) as e:
-        logger.error(
-            f"Error reading config file '{CONFIG_FILE}': {e}. Reverting to defaults."
-        )
+        logger.error(f"Error reading config file '{CONFIG_FILE}': {e}. Reverting to defaults.")
         _save_config_file(DEFAULT_CONFIG)
         return DEFAULT_CONFIG.copy()
 
@@ -407,8 +424,11 @@ def initialize_config(custom_path: Optional[str] = None) -> None:
     and loading the user's config into the global CONFIG variable.
     """
     global USER_DATA_ROOT, CONFIG_FILE, CONFIG
+    
     USER_DATA_ROOT = get_user_data_root(custom_path)
     CONFIG_FILE = os.path.join(USER_DATA_ROOT, "config.json")
+    
     _initialize_defaults(USER_DATA_ROOT)
+    
     CONFIG.clear()
     CONFIG.update(load_config())

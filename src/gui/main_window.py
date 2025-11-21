@@ -18,7 +18,7 @@ import tkinter as tk
 import webbrowser
 from datetime import datetime
 from tkinter import messagebox
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING
 
 import pandas as pd
 import ttkbootstrap as ttk
@@ -47,7 +47,8 @@ from src.gui.theme_manager import ThemeManager
 from src.gui.transaction_manager import TransactionManager
 
 # Component Imports
-from src.gui.components import Header, Status
+from src.gui.components.header import Header
+from src.gui.components.status import Status
 from src.gui.tabs.explorer_tab import ExplorerTab
 from src.gui.tabs.kaspa_bridge_tab import KaspaBridgeTab
 from src.gui.tabs.kaspa_node_tab import KaspaNodeTab
@@ -55,6 +56,10 @@ from src.gui.tabs.log_tab import LogTab
 from src.gui.tabs.normal_analysis_tab import NormalAnalysisTab
 from src.gui.tabs.settings_tab import SettingsTab
 from src.gui.tabs.top_addresses_tab import TopAddressesTab
+
+if TYPE_CHECKING:
+    from src.gui.components.header import Header
+    from src.gui.components.status import Status
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +147,6 @@ class MainWindow(ttk.Window):
         # Fallback to Git command (For Dev Mode)
         if not commit:
             try:
-                # Using --short=7 to try to get 7 chars, but slicing below is safer
                 commit = subprocess.check_output(
                     ["git", "rev-parse", "--short", "HEAD"],
                     stderr=subprocess.DEVNULL
@@ -151,7 +155,6 @@ class MainWindow(ttk.Window):
                 pass
 
         if commit:
-            # FIX: Enforce exactly 7 characters to match GitHub display
             commit_short = commit[:7]
             full_version = f"{base_ver}-{commit_short}"
             CONFIG["version"] = full_version
@@ -200,6 +203,23 @@ class MainWindow(ttk.Window):
         self.start_background_services()
 
         self._load_user_state()
+
+        # 6. Autostart Logic
+        logger.info("Checking autostart configurations...")
+        
+        # Node Autostart
+        if self.kaspa_node_tab and self.kaspa_node_tab.controller:
+            if hasattr(self.kaspa_node_tab.controller, "autostart_if_enabled"):
+                self.kaspa_node_tab.controller.autostart_if_enabled()
+            elif self.kaspa_node_tab.controller.autostart_var.get():
+                # Fallback if controller method missing
+                logger.info("Autostart enabled for Node. Triggering via fallback...")
+                self.after(2000, lambda: self.kaspa_node_tab.controller.start_node(is_autostart=True))
+
+        # Bridge Autostart
+        if self.kaspa_bridge_tab:
+            self.kaspa_bridge_tab.autostart_bridges(is_autostart=True)
+
         self.app_initialized = True
         logger.info("Application fully initialized.")
 
@@ -352,6 +372,10 @@ class MainWindow(ttk.Window):
 
     def on_closing(self) -> None:
         """Handles the window close event."""
+        # Log current autostart settings for debugging
+        logger.info(f"On Close - Node Autostart Config: {CONFIG.get('kaspa_node', {}).get('autostart_var')}")
+        logger.info(f"On Close - Bridge Autostart Config: {CONFIG.get('kaspa_bridge', {}).get('autostart_var')}")
+
         if self.is_busy:
             messagebox.showwarning(
                 translate("Busy"),
@@ -507,7 +531,7 @@ class MainWindow(ttk.Window):
         if not self.config_manager:
             return
             
-        # 1. Save current version hash to prevent overwrite
+        # 1. Save current version hash to prevent overwrite during config reload
         current_runtime_version = CONFIG.get("version")
 
         config = self.config_manager.get_config()
