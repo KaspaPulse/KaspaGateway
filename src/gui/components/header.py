@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Reusable GUI components for the KaspaGateway application.
@@ -257,11 +257,12 @@ class Header(ttk.Frame):
             lang for lang in all_langs if lang["code"] in displayed_lang_codes
         ]
 
+        # Update to include language code in the display (Name (code))
         self.lang_display_map = {
-            f"{translate(lang['name'])}": lang["code"] for lang in display_langs
+            f"{translate(lang['name'])} ({lang['code']})": lang["code"] for lang in display_langs
         }
         self.lang_code_map = {
-            lang["code"]: f"{translate(lang['name'])}" for lang in display_langs
+            lang["code"]: f"{translate(lang['name'])} ({lang['code']})" for lang in display_langs
         }
 
         if not hasattr(self, "lang_combo") or self.lang_combo is None:
@@ -269,7 +270,7 @@ class Header(ttk.Frame):
                 self.lang_frame,
                 values=list(self.lang_display_map.keys()),
                 state="readonly",
-                width=12,
+                width=15,  # Increased width to accommodate code
                 font="-size 9",
             )
             self.lang_combo.bind(
@@ -283,7 +284,8 @@ class Header(ttk.Frame):
             self.lang_combo["values"] = list(self.lang_display_map.keys())
 
         current_lang_code = self.config_manager.get_config().get("language")
-        display_val = self.lang_code_map.get(current_lang_code, "English")
+        # Format fallback appropriately
+        display_val = self.lang_code_map.get(current_lang_code, f"English (en)")
         self.lang_combo.set(display_val)
 
     def _create_stat_frame(
