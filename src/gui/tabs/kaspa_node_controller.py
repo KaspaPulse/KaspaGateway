@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 """
 Contains the Controller (logic and state) for the KaspaNodeTab (View).
-This file handles all business logic, state management, and subprocess
-interactions for the kaspad node.
+Handles business logic, state management, and subprocess interactions for the kaspad node.
+UPDATED: Added strict validation for Custom Download URL in start_node and start_node_update.
 """
 
 from __future__ import annotations
@@ -19,8 +19,9 @@ import sys
 import threading
 import time
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, DISABLED, NORMAL
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, cast
+from pathlib import Path
 
 import psutil
 import ttkbootstrap as ttk
@@ -80,11 +81,9 @@ class KaspaNodeController:
     node_exe_path: str
     _stop_requested: bool
     
-    # Watchdog specific
     watchdog_thread: Optional[threading.Thread]
     watchdog_stop_event: threading.Event
 
-    # UI Variables
     network_var: ttk.StringVar
     loglevel_var: ttk.StringVar
     log_font_size_var: ttk.IntVar
@@ -120,12 +119,10 @@ class KaspaNodeController:
         self.running_command_str = ""
         self.external_process_pid = None
         self._stop_requested = False
-        
-        # Watchdog initialization
+    
         self.watchdog_thread = None
         self.watchdog_stop_event = threading.Event()
 
-        # Determine binary directory
         base_path = os.path.abspath(
             os.getenv(
                 "LOCALAPPDATA",
@@ -526,8 +523,14 @@ class KaspaNodeController:
         asset_name_pattern = r"rusty-kaspa-v[\d\.]+-win64\.zip$"
         target_file_in_zip = "kaspad.exe"
 
-        if self.use_custom_url_var.get() and self.custom_url_var.get():
-            repo_url = self.custom_url_var.get()
+        if self.use_custom_url_var.get():
+            repo_url = self.custom_url_var.get().strip()
+            if not repo_url:
+                messagebox.showerror(translate("Invalid Input"), translate("Custom Download URL is empty."))
+                self.is_updating = False
+                self.set_controls_state(True)
+                return
+
             asset_name_pattern = r"\.zip$"
             target_file_in_zip = self.custom_url_exe_path_var.get()
             if not re.match(r"^[\w\.\-/]+$", target_file_in_zip) or ".." in target_file_in_zip:
@@ -572,32 +575,50 @@ class KaspaNodeController:
 
     def _check_local_kaspad_version(self, prompt_if_missing: bool = False) -> None:
         def worker() -> None:
-            version_file_path = f"{self.node_exe_path}.version"
-            local_version = f"{translate('Local Version')}: N/A"
-            file_exists = os.path.exists(self.node_exe_path)
+            if not os.path.exists(self.node_exe_path):
+                 local_version = f"{translate('Local Version')}: {translate('Not Found')}"
+                 if prompt_if_missing and not self.use_custom_exe_var.get() and self.view.winfo_exists():
+                     self.view.after(0, self._prompt_for_download_path_and_start)
+            else:
+                 try:
+                     startupinfo = None
+                     if sys.platform == "win32":
+                         startupinfo = subprocess.STARTUPINFO()
+                         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                         startupinfo.wShowWindow = subprocess.SW_HIDE
 
-            try:
-                if self.use_custom_exe_var.get():
-                    local_version = f"{translate('Local Version')}: {translate('Custom')}"
-                elif not file_exists:
-                    local_version = f"{translate('Local Version')}: {translate('Not Found')}"
-                    if prompt_if_missing and not self.use_custom_exe_var.get() and self.view.winfo_exists():
-                        self.view.after(0, self._prompt_for_download_path_and_start)
-                elif not os.path.exists(version_file_path):
-                    local_version = f"{translate('Local Version')}: {translate('Unknown')}"
-                else:
-                    with open(version_file_path, "r", encoding="utf-8") as f:
-                        version = f.read().strip()
-                    if not version:
-                        version = translate("Unknown")
-                    local_version = f"{translate('Local Version')}: {version}"
-            except Exception as e:
-                logger.error(f"Failed to read local kaspad version file: {_sanitize_for_logging(e)}")
-                local_version = f"{translate('Local Version')}: {translate('Error')}"
-            finally:
-                if self.view.winfo_exists():
-                    self.view.after(0, self.local_node_version_var.set, local_version)
-                    self.view.after(0, self._update_update_button_logic)
+                     result = subprocess.run(
+                         [self.node_exe_path, "--version"],
+                         capture_output=True,
+                         text=True,
+                         timeout=5,
+                         startupinfo=startupinfo,
+                         creationflags=0x08000000 if sys.platform == "win32" else 0 
+                     )
+                     if result.returncode == 0:
+                         ver_match = re.search(r"version\s+([\d\.\w\-]+)", result.stdout, re.IGNORECASE)
+                         if ver_match:
+                             local_version = f"{translate('Local Version')}: {ver_match.group(1)}"
+                         else:
+                             local_version = f"{translate('Local Version')}: {result.stdout.strip()[:20]}"
+                     else:
+                         raise Exception("Execution failed")
+
+                 except Exception:
+                     version_file_path = f"{self.node_exe_path}.version"
+                     if os.path.exists(version_file_path):
+                        try:
+                            with open(version_file_path, "r", encoding="utf-8") as f:
+                                version = f.read().strip()
+                                local_version = f"{translate('Local Version')}: {version}"
+                        except Exception:
+                             local_version = f"{translate('Local Version')}: {translate('Unknown')}"
+                     else:
+                        local_version = f"{translate('Local Version')}: {translate('Unknown')}"
+
+            if self.view.winfo_exists():
+                self.view.after(0, self.local_node_version_var.set, local_version)
+                self.view.after(0, self._update_update_button_logic)
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -766,8 +787,8 @@ class KaspaNodeController:
                         try:
                             self.node_process.wait(timeout=5)
                         except subprocess.TimeoutExpired:
-                             self.log_message("Watchdog: Node stuck. Forcing kill...", "WARN")
-                             self.stop_node() # Force kill
+                            self.log_message("Watchdog: Node stuck. Forcing kill...", "WARN")
+                            self.stop_node() 
                         
                     time.sleep(2)
                     self.start_node(is_autostart=False)
@@ -785,6 +806,29 @@ class KaspaNodeController:
             return
 
         self._stop_requested = False
+        
+        # --- STRICT VALIDATION FOR CUSTOM EXE PATH ---
+        if self.use_custom_exe_var.get():
+            custom_path = self.custom_exe_path_var.get().strip()
+            if not custom_path:
+                msg = translate("Custom kaspad.exe option is enabled but no file selected. Please select a file or disable the option.")
+                self.log_message(msg, "ERROR")
+                if not is_autostart:
+                    messagebox.showerror(translate("Invalid Input"), msg)
+                return
+        # ----------------------------------------------
+
+        # --- STRICT VALIDATION FOR CUSTOM DOWNLOAD URL ---
+        if self.use_custom_url_var.get():
+            custom_url = self.custom_url_var.get().strip()
+            if not custom_url:
+                msg = translate("Custom Download URL option is enabled but no URL provided. Please enter a URL or disable the option.")
+                self.log_message(msg, "ERROR")
+                if not is_autostart:
+                    messagebox.showerror(translate("Invalid Input"), msg)
+                return
+        # ----------------------------------------------
+
         self._check_for_external_process()
         if self.external_process_pid:
             msg = f"External kaspad.exe found (PID: {self.external_process_pid}). Stop it to run the node here."
@@ -890,7 +934,6 @@ class KaspaNodeController:
 
             threading.Thread(target=self.read_output, args=(self.node_process.stdout,), daemon=True).start()
             
-            # START WATCHDOG
             if self.auto_restart_var.get():
                 self.watchdog_stop_event.clear()
                 self.watchdog_thread = threading.Thread(target=self._watchdog_loop, daemon=True, name="NodeWatchdog")
@@ -915,6 +958,7 @@ class KaspaNodeController:
                 pass
 
         self.running_command_str = ""
+
         try:
             self.log_message(f"\n--- {translate('Process Terminated')} ---", "WARN")
             if self.view.start_button.winfo_exists():
@@ -940,7 +984,6 @@ class KaspaNodeController:
                 self.view.after(5000, lambda: self.start_node(is_autostart=False))
 
     def apply_and_restart_node(self) -> None:
-        """Stops the node (if running) and starts it with the new command."""
         self.log_message("Apply & Restart requested...", "INFO")
         if self.node_process and self.node_process.poll() is None:
             self.log_message("Stopping current node process...", "INFO")
@@ -950,7 +993,6 @@ class KaspaNodeController:
             self.start_node()
 
     def _wait_for_stop_and_start(self, timeout: int = 5000) -> None:
-        """Helper to wait for process to stop before restarting."""
         if self.node_process and self.node_process.poll() is None and timeout > 0:
             self.view.after(500, self._wait_for_stop_and_start, timeout - 500)
         elif timeout <= 0:
@@ -975,7 +1017,14 @@ class KaspaNodeController:
                     except psutil.NoSuchProcess:
                         pass
                 self.node_process.terminate()
-                psutil.wait_procs(children, timeout=3)
+                
+                try:
+                    self.node_process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    self.log_message(translate("Node did not stop gracefully. Forcing kill..."), "WARN")
+                    self.node_process.kill()
+                    self.node_process.wait(timeout=2)
+
             except psutil.NoSuchProcess:
                 self.log_message(translate("Node is not running."), "WARN")
             except Exception as e:
@@ -1060,15 +1109,90 @@ class KaspaNodeController:
         if hasattr(self.view, "db_size_label"):
             self.view.db_size_label.config(text=f"{translate('DB Size')}: {translate('Calculating...')}")
             self.view.db_size_button.config(state=DISABLED)
+            
+            self.update_command_preview()
+            
             threading.Thread(target=self._get_db_size_worker, daemon=True).start()
+            
+            self._check_local_kaspad_version(prompt_if_missing=False)
 
     def _get_db_size_worker(self) -> None:
-        # Placeholder logic for DB size calculation
         size_str = "Unknown"
-        # Implementation specific to DB structure would go here
+        target_path_for_tooltip = "Unknown"
+        
+        try:
+            base_dir = ""
+            
+            appdir_setting = self.option_vars.get("appdir")
+            if appdir_setting and appdir_setting[0].get():
+                if len(appdir_setting) > 1 and appdir_setting[1]:
+                     base_dir = sanitize_cli_arg(appdir_setting[1].get())
+            
+            if not base_dir:
+                base_dir = self._get_default_appdir()
+
+            network = self.network_var.get()
+            net_folder = "kaspa-mainnet"
+            if network == "testnet":
+                suffix = "10"
+                netsuffix_vars = self.option_vars.get("netsuffix")
+                if netsuffix_vars and netsuffix_vars[0].get():
+                    suffix = netsuffix_vars[1].get()
+                net_folder = f"kaspa-testnet-{suffix}"
+            elif network == "devnet":
+                net_folder = "kaspa-devnet"
+            elif network == "simnet":
+                net_folder = "kaspa-simnet"
+            else:
+                net_folder = "kaspa-mainnet"
+            
+            possible_paths = []
+            
+            if appdir_setting and appdir_setting[0].get():
+                 possible_paths.append(os.path.join(base_dir, net_folder, "datadir"))
+                 possible_paths.append(os.path.join(base_dir, net_folder))
+                 possible_paths.append(base_dir)
+            else:
+                 possible_paths.append(os.path.join(os.environ.get("LOCALAPPDATA", ""), "rusty-kaspa", net_folder, "datadir"))
+                 possible_paths.append(os.path.join(self._get_default_appdir(), net_folder))
+
+            target_path = ""
+            for p in possible_paths:
+                if os.path.exists(p):
+                    target_path = p
+                    break
+            
+            target_path_for_tooltip = target_path if target_path else possible_paths[0]
+            
+            if os.path.exists(target_path):
+                 size_bytes = self._get_folder_size(target_path)
+                 if size_bytes >= 0:
+                     if size_bytes < 1024 * 1024:
+                         size_str = f"{size_bytes / 1024:.2f} KB"
+                     elif size_bytes < 1024 * 1024 * 1024:
+                         size_str = f"{size_bytes / (1024 * 1024):.2f} MB"
+                     else:
+                         size_str = f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
+                 else:
+                     size_str = "Error"
+            else:
+                 size_str = "Not Found"
+
+        except Exception as e:
+            logger.error(f"Error calculating DB size: {e}")
+            size_str = "Error"
+
         if self.view.winfo_exists():
-            self.view.after(0, lambda: self.view.db_size_label.config(text=f"{translate('DB Size')}: {size_str}"))
-            self.view.after(0, lambda: self.view.db_size_button.config(state=NORMAL))
+            self.view.after(0, lambda: self._update_db_label(size_str, target_path_for_tooltip))
+
+    def _update_db_label(self, size_str: str, path: str) -> None:
+        try:
+            self.view.db_size_label.config(text=f"{translate('DB Size')}: {size_str}")
+            self.view.db_size_button.config(state=NORMAL)
+            if hasattr(self.view, "db_size_tooltip"):
+                self.view.db_size_tooltip.text = f"{translate('Data directory')}: {path}"
+        except tk.TclError:
+            pass
 
     def _update_log_font(self, *args: Any) -> None:
         if hasattr(self.view, "log_pane_component"):
@@ -1109,5 +1233,4 @@ class KaspaNodeController:
             self.view.after(500, self._check_for_external_process)
 
     def _delete_node_files(self) -> None:
-        # Placeholder for file deletion logic
         pass

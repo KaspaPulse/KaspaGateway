@@ -2,26 +2,26 @@
 # -*- coding: utf-8 -*-
 """
 Contains the GUI tab (View) for managing a local Kaspa node (kaspad).
-This file contains only widget creation and layout logic.
+This file contains widget creation, layout logic, and UI-specific event handling.
 All business logic and state are managed by KaspaNodeController.
 """
 
 from __future__ import annotations
 
 import logging
-import shlex
+import os
+import platform
 import tkinter as tk
-from tkinter import DISABLED, END, NORMAL
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple
+from tkinter import END, NORMAL, DISABLED
+from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Dict, cast
 
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import (
     BOTH,
-    BOTTOM,
     DANGER,
-    END,
     EW,
     INFO,
+    INVERSE,
     LEFT,
     NSEW,
     RIGHT,
@@ -35,7 +35,7 @@ from ttkbootstrap.tooltip import ToolTip
 
 from src.gui.components.log_viewer import LogPane
 from src.utils.i18n import translate
-
+from src.utils.validation import sanitize_cli_arg
 from .kaspa_node_controller import KaspaNodeController
 
 if TYPE_CHECKING:
@@ -74,11 +74,12 @@ class KaspaNodeTab(ttk.Frame):
 
     # Checkboxes
     autostart_cb: ttk.Checkbutton
-    auto_restart_cb: ttk.Checkbutton  # New Auto-Restart GUI Element
+    auto_restart_cb: ttk.Checkbutton
 
     # Status & Info
     db_size_frame: ttk.Frame
     db_size_label: ttk.Label
+    db_size_tooltip: ToolTip
     db_size_button: ttk.Button
     version_info_frame: ttk.Frame
     local_version_label: ttk.Label
@@ -156,6 +157,8 @@ class KaspaNodeTab(ttk.Frame):
         self.controller._add_tracers()
         self.controller._update_all_entry_states()
         self.controller.update_command_preview()
+        # Initialize the DB tooltip with the current path
+        self._update_db_path_tooltip()
 
     def controller_load_settings(self) -> None:
         """Proxy to load settings from controller."""
@@ -255,15 +258,23 @@ class KaspaNodeTab(ttk.Frame):
         )
         self.col1_label.pack(anchor="w", padx=5, pady=(0, 5))
         self.create_option_entry(col1, "--configfile", "configfile")
+        
+        # Handle appdir specially to hook up auto-update logic
         self.create_option_entry(col1, "--appdir", "appdir")
+        if "appdir" in self.controller.option_vars:
+            appdir_tuple = self.controller.option_vars["appdir"]
+            if len(appdir_tuple) > 1 and appdir_tuple[1] is not None:
+                # Add trace to auto-update DB size when appdir changes
+                appdir_tuple[1].trace_add("write", self._on_appdir_change)
+
         self.create_option_entry(col1, "--logdir", "logdir")
         self.create_option_flag(col1, "--nologfiles", "nologfiles")
 
         ttk.Separator(col1).pack(fill=X, pady=(15, 5), padx=5)
-        self.node_download_label = ttk.Label(col1, text=translate("Node Download URL"), font="-size 8")
-        self.node_download_label.pack(
-            anchor="w", padx=5
+        self.node_download_label = ttk.Label(
+            col1, text=translate("Node Download URL"), font="-size 8"
         )
+        self.node_download_label.pack(anchor="w", padx=5)
 
         self.download_url_text = ScrolledText(
             col1, height=3, font=("Segoe UI", 8), autohide=True
@@ -355,6 +366,60 @@ class KaspaNodeTab(ttk.Frame):
         self.create_option_entry(col4, "--rpcmaxclients", "rpcmaxclients")
         self.create_option_flag(col4, "--unsaferpc", "unsaferpc")
         self.create_option_flag(col4, "--nogrpc", "nogrpc")
+
+    def _on_appdir_change(self, *args: Any) -> None:
+        """
+        Callback triggered when appdir changes.
+        Updates the DB Size tooltip and triggers the DB size calculation.
+        """
+        self._update_db_path_tooltip()
+        self.controller.update_db_size()
+
+    def _update_db_path_tooltip(self) -> None:
+        """
+        Calculates the expected DB path based on current settings and updates
+        the tooltip on the DB Size label.
+        """
+        if not hasattr(self, "db_size_tooltip"):
+            return
+
+        try:
+            # Resolve path logic mirroring the controller
+            base_dir = ""
+            appdir_setting = self.controller.option_vars.get("appdir")
+            if appdir_setting and appdir_setting[0].get():
+                if len(appdir_setting) > 1 and appdir_setting[1]:
+                    base_dir = sanitize_cli_arg(appdir_setting[1].get())
+
+            if not base_dir:
+                # Default OS paths
+                if platform.system() == "Windows":
+                    base_dir = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Kaspad")
+                elif platform.system() == "Darwin":
+                    base_dir = os.path.join(os.environ.get("HOME", ""), "Library", "Application Support", "Kaspad")
+                else:
+                    base_dir = os.path.join(os.environ.get("HOME", ""), ".kaspad")
+
+            # Resolve Network Folder
+            network = self.controller.network_var.get()
+            net_folder = "kaspa-mainnet"
+            if network == "testnet":
+                suffix = "10"
+                netsuffix_vars = self.controller.option_vars.get("netsuffix")
+                if netsuffix_vars and netsuffix_vars[0].get():
+                    suffix = netsuffix_vars[1].get()
+                net_folder = f"kaspa-testnet-{suffix}"
+            elif network == "devnet":
+                net_folder = "kaspa-devnet"
+            elif network == "simnet":
+                net_folder = "kaspa-simnet"
+
+            # Target Path
+            target_path = os.path.join(base_dir, net_folder)
+            self.db_size_tooltip.text = f"{translate('Data directory')}: {target_path}"
+
+        except Exception as e:
+            self.db_size_tooltip.text = f"Error resolving path: {e}"
 
     def _on_url_text_change(self, event: Any) -> None:
         """Enable the 'Set Default' button when text changes."""
@@ -555,7 +620,6 @@ class KaspaNodeTab(ttk.Frame):
         )
         self.autostart_cb.pack(fill=X, expand=True, pady=(2, 0), anchor="w")
 
-        # --- New Auto-Restart Checkbox ---
         self.auto_restart_cb = ttk.Checkbutton(
             self.controls_frame,
             text=translate("Auto-Restart on Failure"),
@@ -569,7 +633,6 @@ class KaspaNodeTab(ttk.Frame):
                 "Automatically restart the node if it crashes or stops unexpectedly."
             ),
         )
-        # ---------------------------------
 
         self.db_size_frame = ttk.Frame(self.controls_frame, padding=(0, 2))
         self.db_size_frame.pack(fill=X, expand=True, pady=(2, 0))
@@ -579,6 +642,14 @@ class KaspaNodeTab(ttk.Frame):
             self.db_size_frame, text=f"{translate('DB Size')}: N/A"
         )
         self.db_size_label.grid(row=0, column=0, sticky="w")
+        
+        # Add Tooltip for DB Size path
+        self.db_size_tooltip = ToolTip(
+            self.db_size_label, 
+            text=translate("Path not detected"), 
+            bootstyle=(INFO, INVERSE)
+        )
+
         self.db_size_button = ttk.Button(
             self.db_size_frame,
             text=translate("Refresh"),
@@ -856,10 +927,7 @@ class KaspaNodeTab(ttk.Frame):
 
         if hasattr(self, "node_download_label"):
             self.node_download_label.config(text=translate("Node Download URL"))
-        if hasattr(self, "download_url_text"):
-            # Label for download URL
-            pass
-
+        
         if hasattr(self, "set_default_url_button"):
             self.set_default_url_button.config(text=translate("Set Default"))
 
@@ -982,4 +1050,3 @@ class KaspaNodeTab(ttk.Frame):
             self.controller.latest_node_date_var.set(
                 f"{translate('Updated')}: {current_date}"
             )
-

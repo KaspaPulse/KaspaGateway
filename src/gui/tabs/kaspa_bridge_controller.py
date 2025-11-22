@@ -14,7 +14,6 @@ import re
 import subprocess
 import sys
 import threading
-import time
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from typing import (
@@ -202,9 +201,15 @@ class BridgeInstanceController:
         self.stratum_port_var = ttk.StringVar(value=default_stratum)
         self.prom_port_var = ttk.StringVar(value=default_prom)
         self.hcp_var = ttk.StringVar(value="")
-        self.min_diff_var = ttk.StringVar(value="4096")
-        self.shares_per_min_var = ttk.StringVar(value="20")
-        self.blockwait_var = ttk.StringVar(value="250ms")
+
+        # OPTIMIZED DEFAULTS FOR 10 BPS (100ms block time)
+        # Increased min_diff to reduce spam on high speed network
+        self.min_diff_var = ttk.StringVar(value="8192")
+        # Increased shares per min for faster difficulty adjustment response
+        self.shares_per_min_var = ttk.StringVar(value="30")
+        # Reduced blockwait to 50ms (half of 10BPS block time) to ensure freshness
+        self.blockwait_var = ttk.StringVar(value="50ms")
+        
         self.extranonce_var = ttk.StringVar(
             value="0" if self.instance_id == "_1" else "2"
         )
@@ -237,6 +242,7 @@ class BridgeInstanceController:
         )
 
         self.vardiff_var = ttk.StringVar(value=self._bool_to_str(True))
+        # Force pow2clamp to True by default for ASICs on 10BPS
         self.pow2clamp_var = ttk.StringVar(value=self._bool_to_str(True))
         self.log_file_var = ttk.StringVar(value=self._bool_to_str(True))
         self.console_stats_var = ttk.StringVar(value=self._bool_to_str(True))
@@ -274,14 +280,14 @@ class BridgeInstanceController:
             (self.stratum_port_var, "stratum_port_var", default_stratum),
             (self.prom_port_var, "prom_port_var", default_prom),
             (self.hcp_var, "hcp_var", ""),
-            (self.min_diff_var, "min_diff_var", "4096"),
-            (self.shares_per_min_var, "shares_per_min_var", "20"),
+            (self.min_diff_var, "min_diff_var", "8192"),
+            (self.shares_per_min_var, "shares_per_min_var", "30"),
             (self.vardiff_var, "vardiff_var", True),
             (self.pow2clamp_var, "pow2clamp_var", True),
             (self.log_file_var, "log_file_var", True),
             (self.console_stats_var, "console_stats_var", True),
             (self.vardiff_stats_var, "vardiff_stats_var", True),
-            (self.blockwait_var, "blockwait_var", "250ms"),
+            (self.blockwait_var, "blockwait_var", "50ms"),
             (
                 self.bridge_download_url_var,
                 "bridge_download_url_var",
@@ -829,6 +835,7 @@ class BridgeInstanceController:
                 )
         finally:
             self.is_updating = False
+
             if self.view.winfo_exists():
                 self.view.after(0, self.set_controls_state, True)
 
@@ -1048,7 +1055,7 @@ class BridgeInstanceController:
             self._update_ui_after_exit()
         except (tk.TclError, RuntimeError):
             pass
-        
+         
         self.bridge_process = None
         
         try:
@@ -1560,15 +1567,41 @@ class BridgeInstanceController:
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startupinfo.wShowWindow = subprocess.SW_HIDE
 
-        self.bridge_process = subprocess.Popen(
-            command_list,
-            cwd=working_dir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            startupinfo=startupinfo,
-            creationflags=subprocess.CREATE_NO_WINDOW,
-            text=False,
-        )
+        try:
+            self.bridge_process = subprocess.Popen(
+                command_list,
+                cwd=working_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                startupinfo=startupinfo,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                text=False,
+            )
+
+            # --- PRIORITY BOOST FOR MINING PERFORMANCE ---
+            # Raise priority to ABOVE_NORMAL to reduce block propagation latency
+            if self.bridge_process and psutil:
+                try:
+                    proc = psutil.Process(self.bridge_process.pid)
+                    # Windows: ABOVE_NORMAL_PRIORITY_CLASS
+                    # Linux/Mac: nice value (lower is higher priority, requires permissions usually)
+                    if sys.platform == "win32":
+                        proc.nice(psutil.ABOVE_NORMAL_PRIORITY_CLASS)
+                        self.log_message("Bridge process priority set to ABOVE_NORMAL for lower latency.", "INFO")
+                    else:
+                        # On Linux/Unix non-root users can only increase nice value (lower priority)
+                        # Attempting to lower nice value (raise priority) might fail without root
+                        try:
+                            proc.nice(-5) 
+                            self.log_message("Bridge process nice value set to -5.", "INFO")
+                        except psutil.AccessDenied:
+                            self.log_message("Could not raise process priority (requires root/admin).", "WARN")
+
+                except Exception as e:
+                    logger.error(f"Failed to set process priority: {e}")
+
+        except Exception as e:
+             raise e
 
     def _assign_job_object(self) -> None:
         """Assigns the process to a Windows Job Object if applicable."""
