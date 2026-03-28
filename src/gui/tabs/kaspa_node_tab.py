@@ -156,6 +156,8 @@ class KaspaNodeTab(ttk.Frame):
         self.controller._add_tracers()
         self.controller._update_all_entry_states()
         self.controller.update_command_preview()
+        # Initialize the DB tooltip with the current path
+        self._update_db_path_tooltip()
 
     def controller_load_settings(self) -> None:
         """Proxy to load settings from controller."""
@@ -255,7 +257,15 @@ class KaspaNodeTab(ttk.Frame):
         )
         self.col1_label.pack(anchor="w", padx=5, pady=(0, 5))
         self.create_option_entry(col1, "--configfile", "configfile")
+        
+        # Handle appdir specially to hook up auto-update logic
         self.create_option_entry(col1, "--appdir", "appdir")
+        if "appdir" in self.controller.option_vars:
+            appdir_tuple = self.controller.option_vars["appdir"]
+            if len(appdir_tuple) > 1 and appdir_tuple[1] is not None:
+                # Add trace to auto-update DB size when appdir changes
+                appdir_tuple[1].trace_add("write", self._on_appdir_change)
+
         self.create_option_entry(col1, "--logdir", "logdir")
         self.create_option_flag(col1, "--nologfiles", "nologfiles")
 
@@ -579,6 +589,14 @@ class KaspaNodeTab(ttk.Frame):
             self.db_size_frame, text=f"{translate('DB Size')}: N/A"
         )
         self.db_size_label.grid(row=0, column=0, sticky="w")
+        
+        # Add Tooltip for DB Size path
+        self.db_size_tooltip = ToolTip(
+            self.db_size_label, 
+            text=translate("Path not detected"), 
+            bootstyle=(INFO, INVERSE)
+        )
+
         self.db_size_button = ttk.Button(
             self.db_size_frame,
             text=translate("Refresh"),

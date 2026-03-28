@@ -21,7 +21,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-
 class Results(ttk.Frame):
     """
     Manages the Treeview component for displaying transaction results.
@@ -45,25 +44,23 @@ class Results(ttk.Frame):
         self, parent: ttk.Frame, cancel_event: threading.Event, initial_currency: str
     ) -> None:
         super().__init__(parent)
-        self.main_window = self.winfo_toplevel()  # type: ignore
-        self.current_currency = initial_currency.upper()
-        self.font_size = 8
-        self.sort_info = {"column": "timestamp", "reverse": True}
-        self.grand_total_id = ""
-        self.date_group_ids = {}
-        self.after_id_populate = None
-        self._cancel_event = cancel_event
-        self.current_df = pd.DataFrame()  # Only stores displayed data
-
+        self.main_window: MainWindow = parent.winfo_toplevel()
+        self.current_currency: str = initial_currency.upper()
+        self.font_size: int = 8
+        self.sort_info: Dict[str, Any] = {"column": "timestamp", "reverse": True}
+        self.grand_total_id: str = ""
+        self.date_group_ids: Dict[str, str] = {}
+        self.after_id_populate: Optional[str] = None
+        self._cancel_event: threading.Event = cancel_event
+        self.current_df: pd.DataFrame = pd.DataFrame()
+        self.tx_db = None 
         self._build_ui()
 
     def _build_ui(self) -> None:
-        """Constructs the Treeview and scrollbars."""
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
-
         tree_frame = ttk.Frame(self)
-        tree_frame.grid(row=0, column=0, sticky="nsew")
+        tree_frame.grid(row=0, column=0, sticky=NSEW)
         tree_frame.grid_columnconfigure(0, weight=1)
         tree_frame.grid_rowconfigure(0, weight=1)
 
@@ -87,9 +84,9 @@ class Results(ttk.Frame):
             tree_frame, orient=VERTICAL, command=self.tree.yview, bootstyle="round"
         )
         self.tree.configure(yscrollcommand=vsb.set)
-        self.tree.grid(row=0, column=0, sticky="nsew")
+        self.tree.grid(row=0, column=0, sticky=NSEW)
         vsb.grid(row=0, column=1, sticky="ns")
-
+        
         self._configure_headings()
         self.tree.bind("<Double-1>", self._on_double_click)
         self.show_placeholder(translate("Load an address to see transactions."))
@@ -204,7 +201,6 @@ class Results(ttk.Frame):
                     logger.error(f"Error re-translating row {child_id}: {e}")
 
     def _clear_tree(self) -> None:
-        """Clears all items from the tree and resets state."""
         if self.after_id_populate:
             self.after_cancel(self.after_id_populate)
             self.after_id_populate = None
@@ -214,7 +210,6 @@ class Results(ttk.Frame):
         self.date_group_ids = {}
 
     def show_placeholder(self, message: str) -> None:
-        """Clears the tree and displays a placeholder message."""
         self._clear_tree()
         self.current_df = pd.DataFrame()
         self.tree.insert(
@@ -285,7 +280,8 @@ class Results(ttk.Frame):
         return self.current_df
 
     def update_font_size(self, size: int) -> None:
-        """Applies a new font size to the Treeview."""
+        # RESTORED: Logic to actually apply font size
+        if not self.tree.winfo_exists(): return
         self.font_size = size
         style: ttk.Style = self.main_window.style
         style.configure(
@@ -385,7 +381,7 @@ class Results(ttk.Frame):
         self.tree.update_idletasks()
         self.tree.grid_remove()
         self._clear_tree()
-        self.current_df = df.copy()  # Store only the displayed data
+        self.current_df = df.copy()
         self.current_currency = currency.upper()
 
         if self.current_df.empty:
@@ -428,8 +424,6 @@ class Results(ttk.Frame):
                 by=["date", self.sort_info["column"]],
                 ascending=[False, not self.sort_info["reverse"]],
             )
-        else:
-            sorted_df = self.current_df
 
         data_to_display: List[Dict[str, Any]] = sorted_df.to_dict("records")
         for item in data_to_display:
@@ -493,9 +487,11 @@ class Results(ttk.Frame):
                     f"Failed to display transaction item {item.get('txid')}: {e}"
                 )
 
-        self.tree.grid(row=0, column=0, sticky="nsew")
-        if on_complete_event:
-            on_complete_event.set()
+        except Exception as e:
+            logger.error(f"Display Error: {e}", exc_info=True)
+            self.show_placeholder(f"Error: {e}")
+        
+        self.tree.grid(row=0, column=0, sticky=NSEW)
 
     def append_transactions(self, new_txs_df: pd.DataFrame) -> None:
         """

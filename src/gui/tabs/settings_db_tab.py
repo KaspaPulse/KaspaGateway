@@ -45,7 +45,6 @@ class SettingsDbTab(ttk.Frame):
     db_buttons: Dict[str, ttk.Button]
     db_tree: ttk.Treeview
     db_btn_frame: ttk.Frame
-    # --- End Type Hint Declarations ---
 
     def __init__(self, parent: ttk.Frame, main_window: "MainWindow") -> None:
         super().__init__(parent)
@@ -81,7 +80,7 @@ class SettingsDbTab(ttk.Frame):
         self.db_btn_frame = ttk.Frame(self)
         self.db_btn_frame.grid(row=1, column=0, sticky="w", padx=5, pady=5)
 
-        btn_data: List[Tuple[str, Callable[[], Any], Optional[str]]] = [
+        btn_data = [
             ("Refresh List", self._refresh_db_info, None),
             ("Compact Database", self._compact_db, "info"),
             ("Clear Caches", self._clear_caches, "warning"),
@@ -107,7 +106,7 @@ class SettingsDbTab(ttk.Frame):
                 if btn.winfo_exists():
                     btn.config(state=state)
         except tk.TclError:
-            pass  # Window closing
+            pass
 
     def _refresh_db_info(self) -> None:
         """Clears the tree and starts a worker to fetch DB details."""
@@ -123,7 +122,7 @@ class SettingsDbTab(ttk.Frame):
         ]
 
         for info in db_info_list:
-            details: str = ""
+            details = ""
             try:
                 db_name_lower: str = info["name"].lower()
 
@@ -180,21 +179,14 @@ class SettingsDbTab(ttk.Frame):
             ).start()
 
     def _compact_db_worker(self, db_name: str) -> None:
-        """Worker thread to close connections, compact, and re-open."""
         try:
-            db_path: str = os.path.join(self.db_manager.data_dir, db_name)
-
-            # Close connections on main thread
             self.after(0, self.main_window.close_all_db_connections)
-            time.sleep(0.5)  # Give time for connections to close
-
+            time.sleep(0.5)
             release_lock(db_name)
             time.sleep(0.2)
-
             success, msg = self.db_manager.compact_database(db_name)
-
-            def ui_update() -> None:
-                """UI updates to run on the main thread after compaction."""
+            
+            def ui_update():
                 self.main_window.reinitialize_databases()
                 self._refresh_db_info()
                 self.main_window.status.update_status(translate("Ready"))
@@ -207,7 +199,6 @@ class SettingsDbTab(ttk.Frame):
                 ).show_toast()
 
             self.after(0, ui_update)
-
         except Exception as e:
             logger.error(f"Compact DB worker failed: {e}", exc_info=True)
             self.after(0, self.main_window.reinitialize_databases)
@@ -238,8 +229,7 @@ class SettingsDbTab(ttk.Frame):
                 self._refresh_db_info()
 
     def _get_selected_db_name(self, single: bool = False) -> Optional[Any]:
-        """Gets the selected database name(s) from the treeview."""
-        sel: Tuple[str, ...] = self.db_tree.selection()
+        sel = self.db_tree.selection()
         if not sel:
             ToastNotification(
                 title=translate("No Selection"),
@@ -248,7 +238,6 @@ class SettingsDbTab(ttk.Frame):
                 duration=3000,
             ).show_toast()
             return None
-
         if single and len(sel) > 1:
             ToastNotification(
                 title=translate("No Selection"),
@@ -296,6 +285,7 @@ class SettingsDbTab(ttk.Frame):
         ):
             self._set_buttons_state(DISABLED)
             self.main_window.status.update_status(f"Backing up {db_name}...")
+            threading.Thread(target=self._perform_db_backup, args=(backup_file_path, db_name,), daemon=True).start()
 
             # Execute the full locking and backup process in a worker thread.
             threading.Thread(
@@ -323,7 +313,6 @@ class SettingsDbTab(ttk.Frame):
             ).show_toast()
 
         try:
-            # Step 1: Close connections and release lock before file copy
             self.after(0, self.main_window.close_all_db_connections)
             time.sleep(0.5)
             release_lock(db_name)
@@ -362,21 +351,16 @@ class SettingsDbTab(ttk.Frame):
             if self.winfo_exists():
                 self.after(0, ui_update)
 
+            if self.winfo_exists(): self.after(0, ui_update)
         except Exception as e:
             logger.error(f"Backup DB worker failed: {e}", exc_info=True)
-            if self.winfo_exists():
-                self.after(0, error_ui_update, e)
+            if self.winfo_exists(): self.after(0, error_ui_update, e)
 
     def _restore_db(self) -> None:
-        """
-        Starts the file dialog to allow the user to select the specific backup file.
-        """
-        target_db_name: Optional[str] = self._get_selected_db_name(single=True)
-        if not target_db_name:
-            return
-
-        base_name: str = os.path.splitext(target_db_name)[0]
-        backup_file_path: Optional[str] = filedialog.askopenfilename(
+        target_db_name = self._get_selected_db_name(single=True)
+        if not target_db_name: return
+        base_name = os.path.splitext(target_db_name)[0]
+        backup_file_path = filedialog.askopenfilename(
             title=f"{translate('Select backup file for')} {target_db_name}",
             initialdir=self.db_manager.backup_dir,
             defaultextension=".duckdb",
@@ -403,11 +387,9 @@ class SettingsDbTab(ttk.Frame):
             ).start()
 
     def _perform_db_restore(self, backup_file_path: str, target_db_name: str) -> None:
-        """Worker thread to close connections, restore, and re-open."""
         try:
             self.after(0, self.main_window.close_all_db_connections)
             time.sleep(0.5)
-
             release_lock(target_db_name)
             time.sleep(0.2)
 
@@ -439,8 +421,7 @@ class SettingsDbTab(ttk.Frame):
                 self.main_window.status.update_status(translate("Ready"))
                 self._set_buttons_state(NORMAL)
 
-            if self.winfo_exists():
-                self.after(0, ui_update)
+            if self.winfo_exists(): self.after(0, ui_update)
         except Exception as e:
             logger.error(f"Restore DB worker failed: {e}", exc_info=True)
             self.after(0, self.main_window.reinitialize_databases)
@@ -463,35 +444,26 @@ class SettingsDbTab(ttk.Frame):
             self._delete_selected_databases(dbs_to_delete)
 
     def _delete_selected_databases(self, db_names: List[str]) -> None:
-        """Manages the multi-step process of deleting databases safely."""
         self.main_window.status.update_status(translate("Deleting databases..."))
         self._set_buttons_state(DISABLED)
-
         self.after(100, self._delete_db_step1_close, db_names)
 
     def _delete_db_step1_close(self, db_names: List[str]) -> None:
-        """Step 1: Close all connections from the Main Thread."""
         logger.info("Delete Step 1: Closing all DB connections...")
         self.main_window.close_all_db_connections()
-
-        for db_name in db_names:
-            release_lock(db_name)
-
+        for db_name in db_names: release_lock(db_name)
         self.after(200, self._delete_db_step2_delete, db_names)
 
     def _delete_db_step2_delete(self, db_names: List[str]) -> None:
-        """Step 2: Perform the actual file deletion."""
         logger.info("Delete Step 2: Deleting database files...")
-        deleted_count: int = 0
-        failed_dbs: List[str] = []
+        deleted_count = 0
+        failed_dbs = []
         for db_name in db_names:
             success, msg = self.db_manager.delete_database(db_name)
-            if success:
-                deleted_count += 1
+            if success: deleted_count += 1
             else:
                 failed_dbs.append(db_name)
                 logger.error(f"Failed to delete {db_name}: {msg}")
-
         self.after(100, self._delete_db_step3_reinit, deleted_count, failed_dbs)
 
     def _delete_db_step3_reinit(
@@ -508,11 +480,8 @@ class SettingsDbTab(ttk.Frame):
         self.main_window.reinitialize_databases()
         self._refresh_db_info()
         self.main_window.reset_explorer_tab_state()
-
-        if self.main_window.settings_tab.address_tab_initialized:
-            if self.main_window.settings_tab.address_tab:
-                self.main_window.settings_tab.address_tab.refresh_address_list()
-
+        if self.main_window.settings_tab.address_tab_initialized and self.main_window.settings_tab.address_tab:
+            self.main_window.settings_tab.address_tab.refresh_address_list()
         if failed_dbs:
             ToastNotification(
                 title=translate("Error"),

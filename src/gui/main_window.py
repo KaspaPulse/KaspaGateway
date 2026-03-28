@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Main window class for the KaspaGateway application.
-Handles the main GUI structure, manager initialization, and global state.
+Acts as the View layer and central orchestrator.
 """
 
 from __future__ import annotations
@@ -20,10 +20,9 @@ from datetime import datetime
 from tkinter import filedialog, messagebox
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple, cast
 
-# Third-party imports
 import pandas as pd
 import ttkbootstrap as ttk
-from ttkbootstrap.constants import *
+from ttkbootstrap.constants import BOTH, DANGER, DISABLED, NORMAL, NSEW, X
 from ttkbootstrap.toast import ToastNotification
 
 # Application-specific imports
@@ -33,6 +32,10 @@ from src.api.network import (
     fetch_latest_release_info,
 )
 from src.config.config import CONFIG, get_assets_path
+from src.utils.profiling import log_performance
+from src.utils.formatting import format_large_number
+from src.utils.i18n import switch_language, translate
+from src.utils.validation import validate_kaspa_address
 
 # --- Setup Logger ---
 logger = logging.getLogger(__name__)
@@ -67,7 +70,6 @@ logger.info(
 t_start_imports = time.perf_counter()
 logger.debug("PERF: Importing GUI components...")
 from src.gui.address_manager import AddressManager
-from src.gui.components import Header, Status
 from src.gui.config_manager import ConfigManager
 from src.gui.network_updater import NetworkUpdater
 from src.gui.price_updater import PriceUpdater
@@ -90,95 +92,113 @@ logger.info(
 # --- End Performance-timed Imports ---
 
 if TYPE_CHECKING:
-    from src.database.db_locker import DatabaseLocker
+    from src.gui.components.header import Header
+    from src.gui.components.status import Status
+
+logger = logging.getLogger(__name__)
 
 
 class MainWindow(ttk.Window):
     """
     The main application window.
-    This class is responsible for initializing all managers, building the
-    main UI components, and coordinating communication between them.
+    Acts as the View layer and central orchestrator.
     """
-
-    # --- Class Attribute Type Declarations ---
-    price_var: ttk.StringVar
-    hashrate_var: ttk.StringVar
-    difficulty_var: ttk.StringVar
-    clock_date_var: ttk.StringVar
-    clock_time_var: ttk.StringVar
-    currency_var: ttk.StringVar
-
-    current_address: Optional[str]
-    address_names_map: Dict[str, str]
-    address_names_loaded: threading.Event
-    cancel_event: threading.Event
-    ui_update_job: Optional[str]
-    previous_tab_index: int
-    is_exporting: bool
-    app_initialized: bool
-
-    # Managers
-    tx_db: TransactionDB
-    addr_db: AddressDB
-    app_data_db: AppDataDB
-    db_manager: DatabaseManager
-    config_manager: ConfigManager
-    theme_manager: ThemeManager
-    address_manager: AddressManager
-    transaction_manager: TransactionManager
-    price_updater: PriceUpdater
-    network_updater: NetworkUpdater
-
-    # UI Components
-    header: Header
-    tabview: ttk.Notebook
-    explorer_tab_frame: ttk.Frame
-    status: Status
-    progress_bar: ttk.Progressbar
-    header_placeholder: ttk.Frame
-
-    # Tabs
-    explorer_tab: ExplorerTab
-    analysis_tab_notebook: ttk.Notebook
-    normal_analysis_tab: NormalAnalysisTab
-    top_addresses_tab: TopAddressesTab
-    log_tab: LogTab
-    settings_tab: SettingsTab
-    kaspa_node_tab: KaspaNodeTab
-    kaspa_bridge_tab: KaspaBridgeTab
-    all_tabs: Dict[str, ttk.Widget]
-    # --- End Attribute Declarations ---
 
     def __init__(self) -> None:
         logger.info("Initializing MainWindow...")
+        # Initialize with the configured theme, defaulting to 'superhero'
         super().__init__(themename=CONFIG.get("theme", "superhero").lower())
 
+        self._init_variables_and_version()
+
+        # Logic Managers Placeholders
+        self.config_manager: Optional[ConfigManager] = None
+        self.theme_manager: Optional[ThemeManager] = None
+        self.db_manager: Optional[DatabaseManager] = None
+        self.tx_db: Optional[TransactionDB] = None
+        self.addr_db: Optional[AddressDB] = None
+        self.app_data_db: Optional[AppDataDB] = None
+        self.address_manager: Optional[AddressManager] = None
+        self.transaction_manager: Optional[TransactionManager] = None
+        self.price_updater: Optional[PriceUpdater] = None
+        self.network_updater: Optional[NetworkUpdater] = None
+
+        # UI Components
+        self.header: Optional[Header] = None
+        self.explorer_tab: Optional[ExplorerTab] = None
+        self.normal_analysis_tab: Optional[NormalAnalysisTab] = None
+        self.top_addresses_tab: Optional[TopAddressesTab] = None
+        self.log_tab: Optional[LogTab] = None
+        self.settings_tab: Optional[SettingsTab] = None
+        self.kaspa_node_tab: Optional[KaspaNodeTab] = None
+        self.kaspa_bridge_tab: Optional[KaspaBridgeTab] = None
+        self.status: Optional[Status] = None
+        self.progress_bar: Optional[ttk.Progressbar] = None
+
+        self._build_ui_structure()
+
+        self.after(50, self.deferred_initialization)
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+    def _init_variables_and_version(self) -> None:
+        """Initializes state variables and injects the git hash into the version."""
         default_font: Tuple[str, int] = ("DejaVu Sans", 10)
         self.style.configure(".", font=default_font)
 
         self.price_var = ttk.StringVar(value="...")
         self.hashrate_var = ttk.StringVar(value="...")
         self.difficulty_var = ttk.StringVar(value="...")
-
         self.clock_date_var = ttk.StringVar()
         self.clock_time_var = ttk.StringVar()
         self.currency_var = ttk.StringVar(value=CONFIG.get("selected_currency", "USD"))
 
-        self.current_address = None
-        self.address_names_map = {}
+        self.current_address: Optional[str] = None
+        self.address_names_map: Dict[str, str] = {}
         self.address_names_loaded = threading.Event()
         self.cancel_event = threading.Event()
-        self.ui_update_job = None
-        self.previous_tab_index = 0
-        self.is_exporting = False
-        self.app_initialized = False
+        self.previous_tab_index: int = 0
+        self.is_exporting: bool = False
+        self.app_initialized: bool = False
+        self.all_tabs: Dict[str, ttk.Widget] = {}
+        self.is_busy: bool = False
 
-        self._build_ui_structure()
-        self.after(50, self.deferred_initialization)
+    def _inject_git_hash_into_config(self) -> None:
+        """
+        Updates CONFIG['version'] with the git hash so all UI components display it.
+        """
+        base_ver: str = CONFIG.get("version", "1.0.0")
+        commit: str = ""
 
-        self.protocol("WM_DELETE_WINDOW", self.on_closing)
-        logger.info("MainWindow basic UI structure initialized, deferring heavy tasks.")
+        # Try to read injected version (For Frozen EXE)
+        try:
+            from src.version_info import COMMIT_HASH
+            commit = COMMIT_HASH
+        except ImportError:
+            pass
 
+        # Fallback to Git command (For Dev Mode)
+        if not commit:
+            try:
+                commit = subprocess.check_output(
+                    ["git", "rev-parse", "--short", "HEAD"],
+                    stderr=subprocess.DEVNULL
+                ).decode("ascii").strip()
+            except Exception:
+                pass
+
+        if commit:
+            commit_short = commit[:7]
+            full_version = f"{base_ver}-{commit_short}"
+            CONFIG["version"] = full_version
+            self.title(f"KaspaGateway Version {full_version}")
+        else:
+            self.title(f"KaspaGateway Version {base_ver}")
+
+    def _get_version_string(self) -> str:
+        """Helper to return the version string currently in CONFIG."""
+        return CONFIG.get("version", "1.0.0")
+
+    @log_performance
     def deferred_initialization(self) -> None:
         """
         Run heavyweight initialization tasks after the main window is drawn.
@@ -189,7 +209,30 @@ class MainWindow(ttk.Window):
         )
         t_start_deferred = time.perf_counter()
 
-        self._initialize_managers()
+        # 1. Initialize Managers Directly
+        self.config_manager = ConfigManager()
+        self.theme_manager = ThemeManager(self, self.config_manager)
+        self.reinitialize_databases()
+
+        # 2. Initialize Logic Layers
+        if self.addr_db:
+            self.address_manager = AddressManager(self.addr_db)
+
+        if self.tx_db:
+            self.transaction_manager = TransactionManager(
+                self, self.tx_db, self.cancel_event
+            )
+
+        # 3. Initialize Background Services
+        price_cache_hours = CONFIG.get("performance", {}).get("price_cache_hours", 0.25)
+        self.price_updater = PriceUpdater(
+            self, self.app_data_db, update_interval_sec=int(price_cache_hours * 3600)
+        )
+        self.network_updater = NetworkUpdater(
+            self, self.app_data_db, update_interval_sec=60
+        )
+
+        # 4. Connect UI
         self._connect_managers_to_ui()
 
         self._update_header_stats_from_cache()
@@ -197,9 +240,18 @@ class MainWindow(ttk.Window):
         self.start_background_services()
 
         self._load_user_state()
-        self._check_and_run_autostart_services()
 
-        self._auto_refresh_loop()
+        # 6. Autostart Logic
+        logger.info("Checking autostart configurations...")
+        
+        # Node Autostart
+        if self.kaspa_node_tab and self.kaspa_node_tab.controller:
+            if hasattr(self.kaspa_node_tab.controller, "autostart_if_enabled"):
+                self.kaspa_node_tab.controller.autostart_if_enabled()
+            elif self.kaspa_node_tab.controller.autostart_var.get():
+                # Fallback if controller method missing
+                logger.info("Autostart enabled for Node. Triggering via fallback...")
+                self.after(2000, lambda: self.kaspa_node_tab.controller.start_node(is_autostart=True))
 
         self._start_update_check()
 
@@ -209,11 +261,63 @@ class MainWindow(ttk.Window):
         )
 
         self.app_initialized = True
+        logger.info("Application fully initialized.")
+
+    def reinitialize_databases(self) -> None:
+        """Initializes or re-initializes database connections."""
+        logger.info("Initializing databases...")
+        self.db_manager = DatabaseManager()
+
+        self.tx_db = TransactionDB(
+            f"{self.db_manager.data_dir}/{CONFIG['db_filenames']['transactions']}",
+            initialize_tx_schema,
+        )
+        self.addr_db = AddressDB(
+            f"{self.db_manager.data_dir}/{CONFIG['db_filenames']['addresses']}",
+            initialize_addr_schema,
+        )
+        self.app_data_db = AppDataDB(
+            f"{self.db_manager.data_dir}/{CONFIG['db_filenames']['app_data']}",
+            initialize_app_data_schema,
+        )
+
+        # Update references in managers if they exist
+        if self.address_manager:
+            self.address_manager.db = self.addr_db
+        if self.transaction_manager:
+            self.transaction_manager.tx_db = self.tx_db
+        if self.price_updater:
+            self.price_updater.db = self.app_data_db
+        if self.network_updater:
+            self.network_updater.db = self.app_data_db
+
+    def start_background_services(self) -> None:
+        """Starts configured background services."""
+        try:
+            # Initial fetch
+            if self.price_updater:
+                self.price_updater.initial_fetch()
+            if self.network_updater:
+                self.network_updater.initial_fetch()
+
+            # Auto-refresh check
+            config = self.config_manager.get_config() if self.config_manager else {}
+            auto_refresh = config.get("performance", {}).get("auto_refresh_enabled", False)
+
+            if auto_refresh:
+                logger.info("Auto-refresh enabled. Starting background loops.")
+                if self.price_updater:
+                    self.price_updater.start()
+                if self.network_updater:
+                    self.network_updater.start()
+            else:
+                logger.info("Auto-refresh disabled in settings.")
+
+        except Exception as e:
+            logger.error(f"Failed to start background services: {e}", exc_info=True)
 
     def _build_ui_structure(self) -> None:
-        """Builds the skeleton of the main window."""
-        logger.debug("Building main UI structure...")
-        self.title(translate("KaspaGateway"))
+        """Sets up the main window geometry and basic layout containers."""
         self.geometry("1400x900")
         self.minsize(1200, 800)
         try:
@@ -329,8 +433,10 @@ class MainWindow(ttk.Window):
         logger.info("Database connections and dependent managers re-initialized.")
 
     def _connect_managers_to_ui(self) -> None:
-        """Connects managers to the UI and builds all tabs."""
-        logger.debug("Connecting managers to UI components...")
+        """Initializes and connects UI components with their respective managers."""
+        if not self.theme_manager or not self.config_manager:
+            logger.error("Managers not initialized before UI connection.")
+            return
 
         self.header = Header(
             self,
@@ -345,6 +451,7 @@ class MainWindow(ttk.Window):
             self._on_language_change,
             self.config_manager,
         )
+
         self.header.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 0))
         self.header_placeholder.destroy()
 
@@ -356,13 +463,13 @@ class MainWindow(ttk.Window):
             self.normal_analysis_tab, text=translate("Standard Analysis")
         )
 
-        top_addresses_frame = ttk.Frame(self.tabview)
+        top_addr_frame = ttk.Frame(self.tabview)
         log_frame = ttk.Frame(self.tabview)
         settings_frame = ttk.Frame(self.tabview)
-        kaspa_node_frame = ttk.Frame(self.tabview)
-        kaspa_bridge_frame = ttk.Frame(self.tabview)
+        node_frame = ttk.Frame(self.tabview)
+        bridge_frame = ttk.Frame(self.tabview)
 
-        self.top_addresses_tab = TopAddressesTab(top_addresses_frame, self)
+        self.top_addresses_tab = TopAddressesTab(top_addr_frame, self)
         self.log_tab = LogTab(log_frame)
         self.settings_tab = SettingsTab(settings_frame, self)
         self.kaspa_node_tab = KaspaNodeTab(
@@ -375,17 +482,20 @@ class MainWindow(ttk.Window):
         self.all_tabs = {
             "Explorer": self.explorer_tab_frame,
             "Analysis": self.analysis_tab_notebook,
-            "Top Addresses": top_addresses_frame,
+            "Top Addresses": top_addr_frame,
             "Log": log_frame,
             "Kaspa Node": kaspa_node_frame,
             "Kaspa Bridge": kaspa_bridge_frame,
             "Settings": settings_frame,
         }
+
         self._rebuild_tabs()
         self.tabview.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
-        self.price_updater.update_callback = self._on_price_update
-        self.network_updater.update_callback = self._on_network_update
+        if self.price_updater:
+            self.price_updater.update_callback = self._on_price_update
+        if self.network_updater:
+            self.network_updater.update_callback = self._on_network_update
 
         self._update_ui_for_address_validity(
             validate_kaspa_address(
@@ -428,8 +538,12 @@ class MainWindow(ttk.Window):
             self.destroy()
 
     def shutdown_services(self) -> None:
-        """Shut down all application services and threads gracefully."""
-        logger.info("Shutting down all application services...")
+        """Cleanly shuts down all background services and database connections."""
+        logger.info("Shutting down background services...")
+        if self.price_updater:
+            self.price_updater.stop()
+        if self.network_updater:
+            self.network_updater.stop()
 
         self.shutdown_background_services()
         if hasattr(self, "transaction_manager"):
@@ -779,6 +893,8 @@ class MainWindow(ttk.Window):
                 )
         except (RuntimeError, tk.TclError):
             pass
+            
+        logger.info("Application shutdown complete.")
 
     def _start_address_name_fetch(self) -> None:
         """Initiates background fetch for the global address name map."""
@@ -975,17 +1091,13 @@ class MainWindow(ttk.Window):
             self.difficulty_var.set(f"{format_large_number(difficulty, precision=2)}")
 
     def _update_clock_loop(self) -> None:
-        """Updates the header clock every second."""
         try:
             if not self.winfo_exists():
                 return
             self.clock_date_var.set(time.strftime("%Y-%m-%d"))
             self.clock_time_var.set(time.strftime("%H:%M:%S"))
             self.after(1000, self._update_clock_loop)
-        except (tk.TclError, RuntimeError):
-            pass
-        except Exception as e:
-            logger.error(f"Error in clock update loop: {e}")
+        except Exception:
             pass
 
     def apply_explorer_filters(self) -> None:
@@ -1034,13 +1146,289 @@ class MainWindow(ttk.Window):
                 "last_filters"
             )
 
+        if auto_refresh:
+            logger.info("Auto-refresh enabled. Starting services.")
+            if self.price_updater:
+                self.price_updater.start()
+            if self.network_updater:
+                self.network_updater.start()
+        else:
+            logger.info("Auto-refresh disabled. Stopping services.")
+            if self.price_updater:
+                self.price_updater.stop()
+            if self.network_updater:
+                self.network_updater.stop()
+
+        switch_language(CONFIG["language"])
+        self.re_translate_ui()
+
+    def _on_currency_dropdown_select(self, new_currency: str) -> None:
+        if not self.config_manager:
+            return
+            
+        # 1. Save current version hash to prevent overwrite during config reload
+        current_runtime_version = CONFIG.get("version")
+
+        config = self.config_manager.get_config()
+        config["selected_currency"] = new_currency
+        self.config_manager.save_config(config)
+        
+        # 2. Restore version hash
+        if current_runtime_version:
+             CONFIG["version"] = current_runtime_version
+
+        self.currency_var.set(new_currency)
+
+        if self.price_updater:
+            self._update_price_display(self.price_updater.get_current_prices())
+
+        # Refresh views
+        if hasattr(self, "explorer_tab") and self.explorer_tab:
+            self.explorer_tab.results_component.update_currency_display(new_currency)
+        if self.current_address:
+            self.update_address_balance(self.current_address)
+        if hasattr(self, "top_addresses_tab") and self.top_addresses_tab and self.top_addresses_tab.is_active:
+            self.top_addresses_tab.update_currency_display(new_currency)
+        if hasattr(self, "normal_analysis_tab") and self.normal_analysis_tab:
+            self.normal_analysis_tab.on_currency_change()
+
+    def _on_language_change(self, lang_code: str) -> None:
+        if not self.config_manager:
+            return
+
+        if switch_language(lang_code):
+            # 1. Save current version hash to prevent overwrite
+            current_runtime_version = CONFIG.get("version")
+
+            config = self.config_manager.get_config()
+            config["language"] = lang_code
+            self.config_manager.save_config(config)
+            
+            # 2. Restore version hash
+            if current_runtime_version:
+                 CONFIG["version"] = current_runtime_version
+
+            self.re_translate_ui()
+
+    def re_translate_ui(self) -> None:
+        if "version" in CONFIG:
+            self.title(f"KaspaGateway Version {CONFIG['version']}")
+
+        self._rebuild_tabs()
+
+        try:
+            self.analysis_tab_notebook.tab(0, text=translate("Standard Analysis"))
+        except Exception:
+            pass
+
+        components = [
+            self.header,
+            self.explorer_tab,
+            self.status,
+            self.settings_tab,
+            self.top_addresses_tab,
+            self.log_tab,
+            self.normal_analysis_tab,
+            self.kaspa_node_tab,
+            self.kaspa_bridge_tab,
+        ]
+        for comp in components:
+            if comp and hasattr(comp, "re_translate"):
+                comp.re_translate()
+
+    def _rebuild_tabs(self) -> None:
+        selected = None
+        try:
+            if path := self.tabview.select():
+                selected = self.tabview.nametowidget(path)
+        except Exception:
+            pass
+
+        for tab in self.tabview.tabs():
+            self.tabview.forget(tab)
+
+        tab_order = [
+            "Explorer",
+            "Kaspa Node",
+            "Kaspa Bridge",
+            "Analysis",
+            "Top Addresses",
+            "Log",
+            "Settings",
+        ]
+        visible = CONFIG.get("display", {}).get("displayed_tabs", [])
+
+        for key in tab_order:
+            if key in self.all_tabs:
+                if key == "Settings" or key in visible:
+                    self.tabview.add(self.all_tabs[key], text=f" {translate(key)} ")
+
+        if selected:
+            try:
+                for i, tab_id in enumerate(self.tabview.tabs()):
+                    if self.tabview.nametowidget(tab_id) == selected:
+                        self.tabview.select(i)
+                        break
+            except Exception:
+                self.tabview.select(0)
+        else:
+            self.tabview.select(0)
+
+    def _on_tab_changed(self, event: Any) -> None:
+        if not self.app_initialized or not self.tabview.tabs():
+            return
+
+        try:
+            prev_text = self.tabview.tab(self.previous_tab_index, "text").strip()
+            if prev_text == translate("Top Addresses") and self.top_addresses_tab:
+                self.top_addresses_tab.deactivate()
+        except Exception:
+            pass
+
+        try:
+            sel_idx = self.tabview.index(self.tabview.select())
+            sel_text = self.tabview.tab(sel_idx, "text").strip()
+            self.previous_tab_index = sel_idx
+
+            if sel_text == translate("Top Addresses") and self.top_addresses_tab:
+                self.top_addresses_tab.activate()
+            elif sel_text == translate("Kaspa Node") and self.kaspa_node_tab:
+                self.kaspa_node_tab.controller.activate_tab()
+            elif sel_text == translate("Kaspa Bridge") and self.kaspa_bridge_tab:
+                self.kaspa_bridge_tab.activate_tab()
+            elif sel_text == translate("Settings") and self.settings_tab:
+                self.settings_tab._on_outer_tab_changed(event)
+            elif sel_text == translate("Analysis"):
+                if hasattr(self, "normal_analysis_tab") and self.normal_analysis_tab:
+                    self.normal_analysis_tab.refresh_headers()
+
+        except Exception as e:
+            logger.error(f"Tab change error: {e}")
+
+    def _build_explorer_tab(self, tab: ttk.Frame) -> None:
+        self.explorer_tab = ExplorerTab(tab, self)
+        self.explorer_tab.pack(fill=BOTH, expand=True, padx=5, pady=5)
+
+    def _build_status_bar(self) -> None:
+        f = ttk.Frame(self)
+        f.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 5))
+        f.grid_columnconfigure(0, weight=1)
+        self.status = Status(f)
+        self.status.grid(row=0, column=0, sticky="ew")
+
+        self.progress_bar = ttk.Progressbar(
+            self, mode="indeterminate", bootstyle="success-striped"
+        )
+        self.progress_bar.grid(row=3, column=0, sticky="ew", padx=10, pady=(0, 5))
+        self.progress_bar.grid_remove()
+
+    def _set_ui_for_processing(self, is_processing: bool) -> None:
+        self.set_busy_state(is_processing)
+
+        if is_processing:
+            if self.progress_bar:
+                self.progress_bar.grid()
+                self.progress_bar.start()
+        else:
+            if self.progress_bar:
+                self.progress_bar.stop()
+                self.progress_bar.grid_remove()
+
+    def set_busy_state(self, is_busy: bool) -> None:
+        """
+        Locks the UI during heavy operations while keeping the Log tab accessible.
+        Prevents tab switching away from the current context.
+        """
+        self.is_busy = is_busy
+        state = "disabled" if is_busy else "normal"
+
+        current_tab_id = self.tabview.select()
+
+        for tab_id in self.tabview.tabs():
+            try:
+                tab_text = self.tabview.tab(tab_id, "text")
+
+                # Keep Log tab and Current Tab enabled
+                is_log = "Log" in tab_text or "سجل" in tab_text
+                is_current = (tab_id == current_tab_id)
+
+                if is_current or is_log:
+                    self.tabview.tab(tab_id, state="normal")
+                else:
+                    self.tabview.tab(tab_id, state=state)
+
+            except Exception as e:
+                logger.error(f"Error updating tab state: {e}")
+
+        # Lock/Unlock header controls (Language/Currency/Theme)
+        if hasattr(self, "header") and self.header:
+            # Explicitly enable or disable header controls
+            self.header.set_controls_state(not is_busy)
+
+        if current_tab_id:
+            try:
+                widget = self.tabview.nametowidget(current_tab_id)
+                for child in widget.winfo_children():
+                    if hasattr(child, "set_controls_state"):
+                        child.set_controls_state(not is_busy)
+            except Exception:
+                pass
+
+        self.update_idletasks()
+
+    def cancel_operation(self) -> None:
+        if self.is_busy:
+            logger.info("Cancel requested by user.")
+            self.cancel_event.set()
+            if self.status:
+                self.status.update_status(translate("Cancelling..."))
+
+    def _update_ui_for_address_validity(self, is_valid: bool) -> None:
+        if not self.explorer_tab or not hasattr(self.explorer_tab, "input_component"):
+            return
+        if not self.transaction_manager:
+            return
+
+        is_fetching = self.transaction_manager.is_fetching
+        state = NORMAL if not is_fetching and is_valid else DISABLED
+
+        self.explorer_tab.input_component.fetch_button.config(state=state)
+        self.explorer_tab.input_component.force_fetch_button.config(state=state)
+        self.explorer_tab.input_component.explorer_btn.config(
+            state=NORMAL if is_valid else DISABLED
+        )
+
+        self.explorer_tab.explorer_filter_controls.set_input_state(
+            is_valid and not is_fetching
+        )
+        self.explorer_tab.explorer_filter_controls.set_action_buttons_state(
+            is_valid and not is_fetching
+        )
+
+    def _load_user_state(self) -> None:
+        try:
+            if not self.app_data_db or not self.explorer_tab:
+                return
+
+            last_addr = self.app_data_db.get_user_state("last_address")
             if last_addr and validate_kaspa_address(last_addr):
                 self.explorer_tab.input_component.address_combo.set(last_addr)
                 self.explorer_tab.input_component._on_address_entry_change()
 
-            if last_filters_json:
-                filters: Dict[str, Any] = json.loads(last_filters_json)
+            last_filters = self.app_data_db.get_user_state("last_filters")
+            if last_filters:
+                filters = json.loads(last_filters)
                 fc = self.explorer_tab.explorer_filter_controls
+                if "start_date" in filters and filters["start_date"]:
+                    fc.start_date_label.config(
+                        text=datetime.fromisoformat(filters["start_date"]).strftime("%Y-%m-%d")
+                    )
+                if "end_date" in filters and filters["end_date"]:
+                    fc.end_date_label.config(
+                        text=datetime.fromisoformat(filters["end_date"]).strftime("%Y-%m-%d")
+                    )
+                fc.type_combo.set(filters.get("type_filter", "ALL"))
+                fc.direction_combo.set(filters.get("direction_filter", "ALL"))
 
                 if "start_date" in filters and filters["start_date"]:
                     self.explorer_tab.explorer_filter_controls.start_date_label.config(
@@ -1139,9 +1527,15 @@ class MainWindow(ttk.Window):
             logger.error(f"Error in auto-refresh loop: {e}")
 
     def reset_explorer_tab_state(self) -> None:
-        """Resets the explorer tab to its initial state, clearing all data."""
-        logger.info("Resetting Explorer tab UI state to default.")
         self.current_address = None
+        if self.explorer_tab:
+            self.explorer_tab.input_component.address_combo.set("")
+            self.explorer_tab.input_component.refresh_address_dropdown()
+            self.explorer_tab.results_component.show_placeholder(
+                translate("Load an address to see transactions.")
+            )
+        if self.normal_analysis_tab:
+            self.normal_analysis_tab.update_data(None)
 
         try:
             if hasattr(self, "explorer_tab"):

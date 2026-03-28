@@ -31,10 +31,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# --- FilterControls component is now embedded inside this file ---
-
 KASPA_MINDATE = date(2021, 11, 7)
-TODAY = date.today()
+
 
 
 class ManualCalendarPopup(ttk.Toplevel):
@@ -51,9 +49,8 @@ class ManualCalendarPopup(ttk.Toplevel):
     ):
         super().__init__(parent)
         self.title(translate("Select Date"))
-        self.filter_controls: _ExplorerFilterControls = parent  # type: ignore
+        self.filter_controls = parent
         self.target_label = target_label
-        self.selected_date: Optional[date] = None
 
         if start_date is None or not (KASPA_MINDATE <= start_date <= TODAY):
             start_date = TODAY
@@ -71,7 +68,6 @@ class ManualCalendarPopup(ttk.Toplevel):
             self.header_frame, text="<", command=self.prev_month, bootstyle="secondary"
         )
         self.prev_month_button.pack(side=LEFT, padx=5)
-
         self.month_year_label = ttk.Label(self.header_frame, font="-weight bold")
         self.month_year_label.pack(side=LEFT, expand=True, fill=X)
 
@@ -79,11 +75,9 @@ class ManualCalendarPopup(ttk.Toplevel):
             self.header_frame, text=">", command=self.next_month, bootstyle="secondary"
         )
         self.next_month_button.pack(side=RIGHT, padx=5)
-
         self.days_frame = ttk.Frame(self)
         self.days_frame.pack(pady=5, padx=5)
-
-        self.day_buttons: List[List[ttk.Button]] = []
+        self.day_buttons = []
         self._create_day_widgets()
 
         ttk.Separator(self, orient=HORIZONTAL).pack(fill=X, padx=10, pady=5)
@@ -93,16 +87,12 @@ class ManualCalendarPopup(ttk.Toplevel):
         self._create_preset_buttons(presets_frame)
 
         self.draw_calendar()
-        self.grab_set()
-        self.wait_window()
 
     def _center_window(self) -> None:
-        """Centers the popup window relative to its parent."""
         try:
             self.update_idletasks()
-            toplevel = self.master.winfo_toplevel()
-            if toplevel.winfo_viewable() == 0:
-                self.after(20, self._center_window)
+            tl = self.master.winfo_toplevel()
+            if tl.winfo_viewable() == 0:
                 return
 
             toplevel.update_idletasks()
@@ -126,8 +116,14 @@ class ManualCalendarPopup(ttk.Toplevel):
                 row=0, column=i, sticky="nsew"
             )
 
+    def _create_day_widgets(self) -> None:
+        days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        for i, day in enumerate(days):
+            ttk.Label(self.days_frame, text=day, anchor=CENTER).grid(
+                row=0, column=i, sticky="nsew"
+            )
         for r in range(6):
-            row_buttons: List[ttk.Button] = []
+            row_buttons = []
             for c in range(7):
                 btn = ttk.Button(self.days_frame, text="", width=4, bootstyle="light")
                 btn.grid(row=r + 1, column=c, padx=1, pady=1)
@@ -200,11 +196,7 @@ class ManualCalendarPopup(ttk.Toplevel):
             self.next_month_button.config(state=NORMAL)
 
     def draw_calendar(self) -> None:
-        """Draws the calendar buttons for the current month and year."""
-        self._update_nav_buttons_state()
-        month_name = py_calendar.month_name[self.month]
-        self.month_year_label.config(text=f"{translate(month_name)} {self.year}")
-
+        self.month_year_label.config(text=f"{self.month_names[self.month]} {self.year}")
         cal = py_calendar.monthcalendar(self.year, self.month)
         for r, week in enumerate(cal):
             for c, day in enumerate(week):
@@ -212,9 +204,9 @@ class ManualCalendarPopup(ttk.Toplevel):
                 if day == 0:
                     btn.config(text="", state=DISABLED, command=None)
                 else:
-                    current_day = date(self.year, self.month, day)
+                    d = date(self.year, self.month, day)
                     cmd = lambda d=day: self.on_day_click(d)
-                    if not (KASPA_MINDATE <= current_day <= TODAY):
+                    if not (KASPA_MINDATE <= d <= date.today()):
                         btn.config(text=str(day), state=DISABLED, command=None)
                     else:
                         btn.config(text=str(day), state=NORMAL, command=cmd)
@@ -224,12 +216,10 @@ class ManualCalendarPopup(ttk.Toplevel):
                 self.day_buttons[r][c].config(text="", state=DISABLED, command=None)
 
     def on_day_click(self, day: int) -> None:
-        """Handles a day button click."""
         self.selected_date = date(self.year, self.month, day)
         self.on_select()
 
     def prev_month(self) -> None:
-        """Moves to the previous month."""
         self.month -= 1
         if self.month == 0:
             self.month = 12
@@ -237,7 +227,6 @@ class ManualCalendarPopup(ttk.Toplevel):
         self.draw_calendar()
 
     def next_month(self) -> None:
-        """Moves to the next month."""
         self.month += 1
         if self.month == 13:
             self.month = 1
@@ -253,7 +242,7 @@ class ManualCalendarPopup(ttk.Toplevel):
 
 class _ExplorerFilterControls(ttk.Labelframe):
     """
-    A private FilterControls widget dedicated to the ExplorerTab.
+    A private FilterControls widget dedicated to the Explorer Tab.
     """
 
     def __init__(
@@ -284,10 +273,9 @@ class _ExplorerFilterControls(ttk.Labelframe):
         self.set_action_buttons_state(True)
 
     def _build_ui(self) -> None:
-        # All controls will be placed in this single top_frame
         top_frame = ttk.Frame(self)
         top_frame.pack(fill=X, expand=True, pady=(0, 5))
-
+        
         self.from_date_label = ttk.Label(top_frame, text=translate("From Date:"))
         self.from_date_label.pack(side=LEFT, padx=(0, 5), pady=5)
 
@@ -372,8 +360,7 @@ class _ExplorerFilterControls(ttk.Labelframe):
             bootstyle="primary",
         )
         self.filter_button.pack(side=RIGHT, padx=(0, 5), pady=5)
-
-        # Pack the search entry last, expanding to fill the remaining space
+        
         self.search_entry = ttk.Entry(top_frame)
         self.search_entry.pack(side=RIGHT, fill=X, expand=True, pady=5)
 
@@ -390,7 +377,7 @@ class _ExplorerFilterControls(ttk.Labelframe):
 
     def _reset_filters_ui_and_callback(self) -> None:
         self.start_date_label.config(text=KASPA_MINDATE.strftime("%Y-%m-%d"))
-        self.end_date_label.config(text=TODAY.strftime("%Y-%m-%d"))
+        self.end_date_label.config(text=date.today().strftime("%Y-%m-%d"))
         self.type_combo.set(translate("ALL"))
         self.direction_combo.set(translate("ALL"))
         self.search_entry.delete(0, "end")
@@ -415,7 +402,9 @@ class _ExplorerFilterControls(ttk.Labelframe):
     def _on_focus_in(self, event: Optional[tk.Event]) -> None:
         if self.placeholder_active:
             self.search_entry.delete(0, "end")
-            self.search_entry.config(foreground=self.default_fg_color)
+            self.search_entry.config(
+                foreground=self.master.style.lookup("TEntry", "foreground")
+            )
             self.placeholder_active = False
 
     def _on_focus_out(self, event: Optional[tk.Event]) -> None:
@@ -436,8 +425,10 @@ class _ExplorerFilterControls(ttk.Labelframe):
         search_query = search_text if not self.placeholder_active else None
 
         return {
-            "start_date": start_dt,
-            "end_date": end_dt,
+            "start_date": datetime.strptime(s, "%Y-%m-%d"),
+            "end_date": datetime.combine(
+                datetime.strptime(e, "%Y-%m-%d").date(), datetime.max.time()
+            ),
             "type_filter": self.type_combo.get(),
             "direction_filter": self.direction_combo.get(),
             "search_query": search_query,
@@ -453,7 +444,7 @@ class _ExplorerFilterControls(ttk.Labelframe):
             self.end_date_button,
         ]:
             try:
-                widget.configure(state=state)
+                w.configure(state=s)
             except Exception:
                 pass
 
@@ -466,11 +457,9 @@ class _ExplorerFilterControls(ttk.Labelframe):
             widget.configure(state=state)
 
     def re_translate(self) -> None:
-        self.config(text=" " + translate("Filter") + " ")
+        self.config(text=f" {translate('Filter')} ")
         self.from_date_label.config(text=translate("From Date:"))
         self.to_date_label.config(text=translate("To Date:"))
-        self.type_label.config(text=translate("Type:"))
-        self.direction_label.config(text=translate("Direction"))
         self.filter_button.config(text=translate("Filter"))
         self.reset_button.config(text=translate("Reset Filter"))
 
@@ -489,7 +478,7 @@ class _ExplorerFilterControls(ttk.Labelframe):
         self.search_entry.config(state=NORMAL)
         if self.placeholder_active:
             self.search_entry.delete(0, "end")
-        self._setup_placeholder()
+            self._setup_placeholder()
         self.search_entry.config(state=current_state)
 
 
@@ -498,7 +487,8 @@ class _ExplorerFilterControls(ttk.Labelframe):
 
 class ExplorerTab(ttk.Frame):
     """
-    This class encapsulates all components and logic for the "Explorer" tab.
+    The Explorer Tab allows users to load an address, fetch transactions,
+    filter them, and export the results.
     """
 
     main_window: "MainWindow"
@@ -519,12 +509,20 @@ class ExplorerTab(ttk.Frame):
         self.config_manager = main_window.config_manager
         self.transaction_manager = main_window.transaction_manager
         self.address_manager = main_window.address_manager
+        self.tx_db = main_window.tx_db
+
+        # UI Components
+        self.input_component: Optional[Input] = None
+        self.explorer_filter_controls: Optional[_ExplorerFilterControls] = None
+        self.results_component: Optional[Results] = None
+        self.export_component: Optional[ExportComponent] = None
+        self.font_size_label: Optional[ttk.Label] = None
+        self.font_size_spinbox: Optional[ttk.Spinbox] = None
+        self.font_size_var = ttk.IntVar(value=CONFIG.get("table_font_size", 9))
 
         self._build_ui()
 
     def _build_ui(self) -> None:
-        """Builds all components within the 'Explorer' tab."""
-        logger.debug("Building Explorer tab UI.")
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)
 
@@ -543,13 +541,15 @@ class ExplorerTab(ttk.Frame):
         )
         self.results_component.pack(fill=BOTH, expand=True, padx=5, pady=5)
 
+        # Bottom frame for Export AND Font Control
         bottom_frame = ttk.Frame(self)
         bottom_frame.pack(fill=X, padx=5, pady=5)
-        bottom_frame.grid_columnconfigure(1, weight=1)
+        bottom_frame.grid_columnconfigure(1, weight=1)  # Spacer
 
         self.export_component = ExportComponent(bottom_frame, self.export_data)
         self.export_component.grid(row=0, column=0, sticky="w")
 
+        # Font size controls
         font_size_frame = ttk.Frame(bottom_frame)
         font_size_frame.grid(row=0, column=2, sticky="e")
         self.font_size_label = ttk.Label(
@@ -557,7 +557,6 @@ class ExplorerTab(ttk.Frame):
         )
         self.font_size_label.pack(side=LEFT, padx=(0, 5))
 
-        self.font_size_var = ttk.IntVar(value=CONFIG.get("table_font_size", 9))
         self.font_size_spinbox = ttk.Spinbox(
             font_size_frame,
             from_=6,
@@ -568,12 +567,14 @@ class ExplorerTab(ttk.Frame):
         )
         self.font_size_spinbox.pack(side=LEFT)
 
+        # Init font size
         self.results_component.update_font_size(self.font_size_var.get())
 
     def set_controls_state(self, active: bool) -> None:
-        """Enable or disable all controls on this tab."""
-        is_valid_address: bool = self.main_window.current_address is not None
-        home_has_data: bool = self.results_component.has_data()
+        if not self.winfo_exists():
+            return
+        is_valid_address = self.main_window.current_address is not None
+        home_has_data = self.results_component.has_data()
 
         self.input_component.set_ui_state(not active)
         self.explorer_filter_controls.set_input_state(active and is_valid_address)
@@ -581,33 +582,24 @@ class ExplorerTab(ttk.Frame):
             active and is_valid_address
         )
 
+        can_filter = active and is_valid_address
+        self.explorer_filter_controls.set_input_state(can_filter)
+        self.explorer_filter_controls.set_action_buttons_state(can_filter)
         self.export_component.set_ui_state(active and home_has_data)
-        self.font_size_spinbox.config(state=NORMAL if active else DISABLED)
+
+        try:
+            self.font_size_spinbox.config(state=NORMAL if active else DISABLED)
+        except tk.TclError:
+            pass
 
     def re_translate(self) -> None:
-        """Re-translates all components in this tab."""
         self.input_component.re_translate()
         self.explorer_filter_controls.re_translate()
         self.results_component.re_translate()
         self.export_component.re_translate()
         self.font_size_label.config(text=f"{translate('Transaction Table Font Size')}:")
 
-    def _display_filtered_data_callback(self, filtered_df: pd.DataFrame) -> None:
-        """
-        [MainThread Callback]
-        Safely updates the UI with the filtered data.
-        """
-        self.results_component.display_data(
-            filtered_df, self.main_window.currency_var.get()
-        )
-        self.main_window.status.update_status("Ready")
-        self.main_window._set_ui_for_processing(False)
-
     def apply_explorer_filters(self) -> None:
-        """
-        Applies filters on the Explorer tab by running a query in a worker
-        thread and updating the UI in the main thread.
-        """
         if self.transaction_manager.is_fetching:
             ToastNotification(
                 title=translate("Fetch Active"),
@@ -625,9 +617,8 @@ class ExplorerTab(ttk.Frame):
 
         self.main_window.status.update_status(translate("Applying filters..."))
         self.main_window._set_ui_for_processing(True)
-
-        filters: Dict[str, Any] = self.explorer_filter_controls.get_filters()
-        address: str = self.main_window.current_address
+        filters = self.explorer_filter_controls.get_filters()
+        addr = self.main_window.current_address
 
         def worker() -> None:
             try:
@@ -640,37 +631,28 @@ class ExplorerTab(ttk.Frame):
 
                 if self.winfo_exists():
                     self.main_window.after(
-                        0, self._display_filtered_data_callback, filtered_df
+                        0, self._display_callback, pd.DataFrame(data)
                     )
-
             except Exception as e:
-                logger.error(f"Error in filter worker thread: {e}", exc_info=True)
-                if self.winfo_exists():
-                    self.main_window.after(
-                        0, self.main_window.status.update_status, f"Error: {e}"
-                    )
-                    self.main_window.after(
-                        0, self.main_window._set_ui_for_processing, False
-                    )
+                logger.error(f"Filter error: {e}")
+                self.main_window.after(
+                    0, self.main_window._set_ui_for_processing, False
+                )
 
-        threading.Thread(target=worker, daemon=True, name="FilterWorker").start()
+        threading.Thread(target=worker, daemon=True).start()
 
-    def reset_explorer_filters_display(self) -> None:
-        """
-        Resets the explorer tab's transaction list by re-applying the
-        (now cleared) filters.
-        """
-        logger.debug("Resetting explorer filters display by re-querying.")
-        self.apply_explorer_filters()
+    def _display_callback(self, df: pd.DataFrame) -> None:
+        self.results_component.display_data(df, self.main_window.currency_var.get())
+        self.main_window.status.update_status("Ready")
+        self.main_window._set_ui_for_processing(False)
 
-    @log_performance
     def export_data(self, export_format: str) -> None:
         """Initiates an export for the Explorer tab's data."""
         df_to_export: pd.DataFrame = (
             self.results_component.get_current_view_data_as_df()
         )
 
-        if df_to_export.empty:
+        if df.empty:
             ToastNotification(
                 title=translate("Export Results:"),
                 message=translate("No data to export."),
@@ -689,14 +671,17 @@ class ExplorerTab(ttk.Frame):
         export_dir: str = CONFIG.get("paths", {}).get("export", ".")
         os.makedirs(export_dir, exist_ok=True)
 
-        file_path: Optional[str] = filedialog.asksaveasfilename(
+        file_path = filedialog.asksaveasfilename(
             initialfile=initial_filename,
             defaultextension=f".{export_format}",
             filetypes=[(f"{export_format.upper()} files", f"*.{export_format}")],
             title=f"{translate('Save as')} {export_format.upper()}",
             initialdir=export_dir,
         )
+
         if not file_path:
+            # Unlock UI if cancelled
+            self.main_window.set_busy_state(False)
             return
 
         self.main_window.status.update_status(
@@ -710,11 +695,13 @@ class ExplorerTab(ttk.Frame):
             else ""
         )
 
-        export_args: Dict[str, Any] = {
-            "df": df_to_export,
+        export_args = {
+            "df": df,
             "file_path": file_path,
             "kaspa_address": self.main_window.current_address,
-            "address_name": address_name,
+            "address_name": self.main_window.address_names_map.get(
+                self.main_window.current_address, ""
+            ),
             "currency": self.main_window.currency_var.get(),
             "known_names_map": self.main_window.address_names_map,
         }
@@ -736,6 +723,8 @@ class ExplorerTab(ttk.Frame):
             f"Exporting {len(export_args['df'])} records for address '{addr}' to {export_format.upper()} at {f_path}"
         )
 
+    def _export_worker(self, export_format: str, export_args: Dict[str, Any]) -> None:
+        """Background thread to perform the data export."""
         try:
             export_map: Dict[str, Callable[..., Tuple[bool, str, str]]] = {
                 "csv": export_df_to_csv,
@@ -769,7 +758,7 @@ class ExplorerTab(ttk.Frame):
                     )
 
         except Exception as e:
-            logger.error(f"Export worker failed for explorer tab: {e}", exc_info=True)
+            logger.error(f"Export worker failed: {e}", exc_info=True)
             if self.winfo_exists():
                 self.main_window.after(
                     0,
@@ -781,7 +770,7 @@ class ExplorerTab(ttk.Frame):
                     ).show_toast(),
                 )
         finally:
-            self.main_window.is_exporting = False
+            # UNLOCK UI regardless of success or failure
             if self.winfo_exists():
                 self.main_window.after(
                     0, self.main_window.status.update_status, "Ready"
@@ -791,10 +780,9 @@ class ExplorerTab(ttk.Frame):
                 )
 
     def _on_font_size_change(self) -> None:
-        """Saves the new font size selection to config."""
-        new_size: int = self.font_size_var.get()
+        new_size = self.font_size_var.get()
         self.results_component.update_font_size(new_size)
-        config: Dict[str, Any] = self.config_manager.get_config()
+        config = self.config_manager.get_config()
         config["table_font_size"] = new_size
         self.config_manager.save_config(config)
 
@@ -804,8 +792,8 @@ class ExplorerTab(ttk.Frame):
             all_txs_df, self.main_window.currency_var.get()
         )
 
-    def append_transaction_data(self, new_txs_df: pd.DataFrame) -> None:
-        """Proxy to append data to the Results component."""
-        if new_txs_df.empty:
-            return
-        self.results_component.append_transactions(new_txs_df)
+    def set_new_transaction_dataset(self, df: pd.DataFrame) -> None:
+        self.results_component.display_data(df, self.main_window.currency_var.get())
+
+    def append_transaction_data(self, df: pd.DataFrame) -> None:
+        self.results_component.append_transactions(df)

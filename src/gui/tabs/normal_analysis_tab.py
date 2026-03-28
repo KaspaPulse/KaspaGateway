@@ -29,11 +29,22 @@ from typing import (
 import duckdb
 import pandas as pd
 import ttkbootstrap as ttk
-from ttkbootstrap.constants import *
-from ttkbootstrap.scrolled import ScrolledText
+from ttkbootstrap.constants import (
+    BOTH,
+    CENTER,
+    DANGER,
+    DISABLED,
+    HORIZONTAL,
+    LEFT,
+    NORMAL,
+    RIGHT,
+    WARNING,
+    X,
+    VERTICAL,
+)
 from ttkbootstrap.toast import ToastNotification
 
-from src.config.config import CONFIG, get_active_api_config
+from src.config.config import get_active_api_config
 from src.export import (
     export_analysis_to_csv,
     export_analysis_to_html,
@@ -43,12 +54,10 @@ from src.gui.components.export import ExportComponent
 from src.utils.i18n import get_all_translations_for_key, translate
 from src.utils.profiling import log_performance
 
-logger = logging.getLogger(__name__)
-
 if TYPE_CHECKING:
     from src.gui.main_window import MainWindow
 
-# --- FilterControls component is now embedded inside this file ---
+logger = logging.getLogger(__name__)
 
 KASPA_MINDATE = date(2021, 11, 7)
 TODAY = date.today()
@@ -68,7 +77,7 @@ class ManualCalendarPopup(ttk.Toplevel):
     ):
         super().__init__(parent)
         self.title(translate("Select Date"))
-        self.filter_controls: _AnalysisFilterControls = parent  # type: ignore
+        self.filter_controls = parent
         self.target_label = target_label
         self.selected_date: Optional[date] = None
 
@@ -77,6 +86,12 @@ class ManualCalendarPopup(ttk.Toplevel):
 
         self.year: int = start_date.year
         self.month: int = start_date.month
+        
+        # Month names for display (index 0 is empty)
+        self.month_names = [
+            "", "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ]
 
         self.transient(parent.winfo_toplevel())
         self.after(20, self._center_window)
@@ -219,7 +234,7 @@ class ManualCalendarPopup(ttk.Toplevel):
     def draw_calendar(self) -> None:
         """Draws the calendar buttons for the current month and year."""
         self._update_nav_buttons_state()
-        month_name = py_calendar.month_name[self.month]
+        month_name = self.month_names[self.month]
         self.month_year_label.config(text=f"{translate(month_name)} {self.year}")
 
         cal = py_calendar.monthcalendar(self.year, self.month)
@@ -564,11 +579,11 @@ class NormalAnalysisTab(ttk.Frame):
         self.main_window: "MainWindow" = main_window
         self.pack(fill=BOTH, expand=True, padx=0, pady=0)
 
-        self.analysis_results: Dict[str, Any] = {}
-        self.main_address: str = ""
-        self.is_analysis_running: bool = False
+        self.analysis_results = {}
+        self.main_address = ""
+        self.is_analysis_running = False
         self.normal_cancel_event = threading.Event()
-        self.BATCH_LOAD_SIZE: int = 100
+        self.BATCH_LOAD_SIZE = 100
 
         self._build_normal_analysis_tab(self)
         self.set_controls_state(True)
@@ -622,7 +637,9 @@ class NormalAnalysisTab(ttk.Frame):
         self.normal_summary_labelframe = ttk.Labelframe(
             top_area_frame, text=f" {translate('Summary')} ", padding=10
         )
-        self.normal_summary_labelframe.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
+        self.normal_summary_labelframe.grid(
+            row=0, column=0, sticky="nsew", padx=(0, 5)
+        )
         self.normal_summary_labels = {}
         self._build_normal_summary_area(self.normal_summary_labelframe)
 
@@ -644,7 +661,7 @@ class NormalAnalysisTab(ttk.Frame):
 
     def _show_normal_context_menu(self, event: tk.Event) -> None:
         """Shows the context menu on right-click if an item is valid."""
-        item_id: str = self.normal_tree.identify_row(event.y)
+        item_id = self.normal_tree.identify_row(event.y)
         if not item_id:
             return
 
@@ -654,7 +671,7 @@ class NormalAnalysisTab(ttk.Frame):
         if "child" in tags or "placeholder" in tags:
             return
 
-        values: Tuple[str, ...] = self.normal_tree.item(item_id, "values")
+        values = self.normal_tree.item(item_id, "values")
         if not values or not values[0]:
             return
 
@@ -662,7 +679,7 @@ class NormalAnalysisTab(ttk.Frame):
 
     def _normal_add_selected_to_my_addresses(self) -> None:
         """Saves the selected counterparty address to the user's address book."""
-        sel: Tuple[str, ...] = self.normal_tree.selection()
+        sel = self.normal_tree.selection()
         if not sel:
             return
 
@@ -691,7 +708,8 @@ class NormalAnalysisTab(ttk.Frame):
                     and self.main_window.settings_tab.address_tab
                 ):
                     self.main_window.settings_tab.address_tab.refresh_address_list()
-                self.main_window.explorer_tab.input_component.refresh_address_dropdown()
+                if hasattr(self.main_window, "explorer_tab") and self.main_window.explorer_tab:
+                    self.main_window.explorer_tab.input_component.refresh_address_dropdown()
             else:
                 ToastNotification(
                     title=translate("Error"),
@@ -701,13 +719,13 @@ class NormalAnalysisTab(ttk.Frame):
 
     def _normal_copy_selected_address(self) -> None:
         """Copies the selected counterparty address to the clipboard."""
-        sel: Tuple[str, ...] = self.normal_tree.selection()
+        sel = self.normal_tree.selection()
         if not sel:
             return
-        values: List[str] = self.normal_tree.item(sel[0], "values")
+        values = self.normal_tree.item(sel[0], "values")
 
         if len(values) > 0 and values[0]:
-            address: str = values[0]
+            address = values[0]
             self.clipboard_clear()
             self.clipboard_append(address)
             ToastNotification(
@@ -824,8 +842,8 @@ class NormalAnalysisTab(ttk.Frame):
         if not hasattr(self, "run_analysis_button"):
             return
 
-        is_data_available: bool = bool(self.main_address)
-        is_running: bool = self.is_analysis_running
+        is_data_available = bool(self.main_address)
+        is_running = self.is_analysis_running
         self.run_analysis_button.config(
             state=NORMAL if is_data_available and not is_running else DISABLED
         )
@@ -920,7 +938,7 @@ class NormalAnalysisTab(ttk.Frame):
         self.normal_analysis_prog_bar.pack(side=LEFT, padx=5, fill=X, expand=True)
         self.normal_analysis_prog_bar.start()
 
-        filters: Dict[str, Any] = self.normal_filter_controls.get_filters()
+        filters = self.normal_filter_controls.get_filters()
         threading.Thread(
             target=self._normal_analysis_worker,
             args=(filters,),
@@ -934,7 +952,10 @@ class NormalAnalysisTab(ttk.Frame):
         Worker thread to fetch and process data for standard analysis.
         """
         try:
-            df_list: List[Dict[str, Any]] = self.main_window.tx_db.filter_transactions(
+            if not self.main_window.tx_db:
+                return
+                
+            df_list = self.main_window.tx_db.filter_transactions(
                 address=self.main_address, **filters
             )
             if self.normal_cancel_event.is_set():
@@ -981,7 +1002,7 @@ class NormalAnalysisTab(ttk.Frame):
             FROM filtered_df
             """
             summary_df = con.execute(summary_query).fetchdf()
-            summary: pd.Series = summary_df.iloc[0]
+            summary = summary_df.iloc[0]
 
             if self.normal_cancel_event.is_set():
                 raise InterruptedError("Analysis cancelled.")
@@ -1015,7 +1036,7 @@ class NormalAnalysisTab(ttk.Frame):
                 else 0
             )
 
-            summary_snapshot: Dict[str, str] = {
+            summary_snapshot = {
                 "Total Inflow (KAS)": f"{summary['total_inflow']:,.2f}",
                 "Total Outflow (KAS)": f"{summary['total_outflow']:,.2f}",
                 "Net Flow (KAS)": f"{(summary['total_inflow'] - summary['total_outflow']):,.2f}",
@@ -1173,7 +1194,7 @@ class NormalAnalysisTab(ttk.Frame):
             self.normal_tree.delete(placeholder_id)
 
         for address, tx_list in counterparties.items():
-            tx_count: int = len(tx_list)
+            tx_count = len(tx_list)
             net_flow: float
             display_name: str
 
@@ -1189,8 +1210,8 @@ class NormalAnalysisTab(ttk.Frame):
                     known_name if known_name else f"{address[:15]}...{address[-5:]}"
                 )
 
-            value: float = net_flow * price
-            values_tuple: Tuple[str, ...] = (
+            value = net_flow * price
+            values_tuple = (
                 address if address != "Coinbase / Mining" else "",
                 f"{tx_count}",
                 f"{net_flow:,.2f}",
@@ -1203,7 +1224,7 @@ class NormalAnalysisTab(ttk.Frame):
             if self.normal_tree.exists(address):
                 self.normal_tree.item(address, text=display_name, values=values_tuple)
             else:
-                parent_id: str = self.normal_tree.insert(
+                parent_id = self.normal_tree.insert(
                     "",
                     "end",
                     iid=address,
@@ -1217,15 +1238,15 @@ class NormalAnalysisTab(ttk.Frame):
 
     def _on_normal_tree_open(self, event: Any) -> None:
         """Loads child transactions when a counterparty node is expanded."""
-        item_id: str = self.normal_tree.focus()
+        item_id = self.normal_tree.focus()
         if not item_id:
             return
 
-        child_nodes: Tuple[str, ...] = self.normal_tree.get_children(item_id)
+        child_nodes = self.normal_tree.get_children(item_id)
         if not child_nodes:
             return
 
-        first_child_id: str = child_nodes[0]
+        first_child_id = child_nodes[0]
         if first_child_id != f"child_{item_id}":
             return
 
@@ -1249,7 +1270,7 @@ class NormalAnalysisTab(ttk.Frame):
         sorted_txs: List[Dict[str, Any]] = sorted(
             tx_list, key=lambda x: x["timestamp"], reverse=True
         )
-        tx_iterator: Iterator[Dict[str, Any]] = iter(sorted_txs)
+        tx_iterator = iter(sorted_txs)
 
         self.after(
             10, self._load_normal_analysis_batch, item_id, tx_iterator, price, currency
@@ -1306,13 +1327,13 @@ class NormalAnalysisTab(ttk.Frame):
 
     def _on_normal_tree_close(self, event: Any) -> None:
         """When closing a node, clear children and re-add placeholder."""
-        item_id: str = self.normal_tree.focus()
+        item_id = self.normal_tree.focus()
         if not item_id or not self.normal_tree.get_children(item_id):
             return
         if not self.analysis_results.get("counterparties", {}).get(item_id):
             return
 
-        first_child_id: str = self.normal_tree.get_children(item_id)[0]
+        first_child_id = self.normal_tree.get_children(item_id)[0]
         if first_child_id == f"child_{item_id}":
             return
 
@@ -1352,7 +1373,7 @@ class NormalAnalysisTab(ttk.Frame):
 
     def _on_normal_tree_double_click(self, event: Any) -> None:
         """Handles double-click on the tree to open explorer."""
-        item_id: str = self.normal_tree.focus()
+        item_id = self.normal_tree.focus()
         if not item_id:
             return
 
@@ -1371,7 +1392,7 @@ class NormalAnalysisTab(ttk.Frame):
         elif "placeholder" not in tags:
             values = self.normal_tree.item(item_id)["values"]
             if values and values[0]:
-                address: str = values[0]
+                address = values[0]
                 try:
                     url = get_active_api_config()["explorer"]["address"].format(
                         kaspaAddress=address
@@ -1385,7 +1406,7 @@ class NormalAnalysisTab(ttk.Frame):
         if not hasattr(self, "normal_tree"):
             return
 
-        currency: str = self.main_window.currency_var.get().upper()
+        currency = self.main_window.currency_var.get().upper()
         self.normal_tree.heading(
             "#0", text=f"{translate('Known Name')} / {translate('Date/Time')}"
         )
@@ -1416,7 +1437,7 @@ class NormalAnalysisTab(ttk.Frame):
         """Updates the text of the context menu items."""
         if not hasattr(self, "normal_context_menu"):
             return
-        self.normal_context_menu.delete(0, END)
+        self.normal_context_menu.delete(0, "end")
         self.normal_context_menu.add_command(
             label=translate("Add to My Addresses"),
             command=self._normal_add_selected_to_my_addresses,
@@ -1479,7 +1500,7 @@ class NormalAnalysisTab(ttk.Frame):
         )
         os.makedirs(export_dir, exist_ok=True)
 
-        file_path: Optional[str] = filedialog.asksaveasfilename(
+        file_path = filedialog.asksaveasfilename(
             initialfile=initial_filename,
             defaultextension=f".{export_format}",
             filetypes=[(f"{export_format.upper()} files", f"*.{export_format}")],
@@ -1488,6 +1509,8 @@ class NormalAnalysisTab(ttk.Frame):
         )
 
         if not file_path:
+            # Release lock if cancelled
+            self.main_window.set_busy_state(False)
             return
 
         self.main_window.status.update_status(
@@ -1564,4 +1587,5 @@ class NormalAnalysisTab(ttk.Frame):
                 )
         finally:
             if self.winfo_exists():
+                self.after(0, self.main_window.set_busy_state, False)
                 self.after(0, self.main_window.status.update_status, "Ready")

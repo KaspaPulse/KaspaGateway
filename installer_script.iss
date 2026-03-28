@@ -53,9 +53,8 @@ Name: "{userappdata}\KaspaGateway"; Flags: uninsneveruninstall
 
 [Files]
 ; --- Files to Install ---
-; Source is the folder created by PyInstaller (assuming a 'one-dir' build)
+; Source is the folder created by PyInstaller
 Source: "dist\KaspaGateway\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-; Note: Ensure "dist\KaspaGateway" is the correct path from your PyInstaller output
 
 [Tasks]
 ; --- Options during installation ---
@@ -63,16 +62,11 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Icons]
 ; --- Start Menu and Desktop Icons ---
-; Passes the user data path on startup.
-;
 ; *** FIX ***
 ; IconFilename has been REMOVED. Inno Setup will now automatically
 ; extract the high-resolution icon embedded inside KaspaGateway.exe
-; (which was set by the .spec file). This fixes the taskbar/desktop icon issue.
-;
 Name: "{group}\KaspaGateway"; Filename: "{app}\KaspaGateway.exe"; Parameters: "--user-data-path ""{userappdata}\KaspaGateway"""; WorkingDir: "{app}"
 Name: "{userdesktop}\KaspaGateway"; Filename: "{app}\KaspaGateway.exe"; Parameters: "--user-data-path ""{userappdata}\KaspaGateway"""; WorkingDir: "{app}"; Tasks: desktopicon
-
 
 [Registry]
 ; --- Add Autostart registry key (if user enables it in the app) ---
@@ -88,7 +82,4 @@ Filename: "{app}\KaspaGateway.exe"; Parameters: "--user-data-path ""{userappdata
 
 [UninstallDelete]
 ; --- Clean up user data on uninstall ---
-; This ensures the database, logs, and config are removed.
 Type: filesandordirs; Name: "{userappdata}\KaspaGateway"
-
-; --- No [Code] section is needed for this simple installer ---

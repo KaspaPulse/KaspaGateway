@@ -9,7 +9,7 @@ import ttkbootstrap as ttk
 try:
     import winreg
 except ImportError:
-    winreg = None  # type: ignore
+    winreg = None
 
 from functools import reduce
 from operator import getitem
@@ -45,7 +45,7 @@ def _get_nested_value(
 ) -> Any:
     """Safely retrieves a nested value from a dictionary."""
     try:
-        return reduce(getitem, keys, d)
+        return reduce(getitem, keys, data)
     except (KeyError, TypeError):
         return default
 
@@ -53,8 +53,8 @@ def _get_nested_value(
 def _set_nested_value(d: Dict[str, Any], keys: Tuple[str, ...], value: Any) -> None:
     """Safely sets a nested value in a dictionary."""
     for key in keys[:-1]:
-        d = d.setdefault(key, {})
-    d[keys[-1]] = value
+        data = data.setdefault(key, {})
+    data[keys[-1]] = value
 
 
 class SettingsTab(ttk.Frame):
@@ -100,12 +100,21 @@ class SettingsTab(ttk.Frame):
         self.address_tab: Optional[SettingsAddressTab] = None
         self.db_tab: Optional[SettingsDbTab] = None
 
-        self.address_tab_initialized: bool = False
-        self.db_tab_initialized: bool = False
+        # Smart Save State
+        self.original_state_snapshot: str = ""
+        self._is_initializing = True
+
+        self.api_perf_tab = None
+        self.address_tab = None
+        self.db_tab = None
+        self.address_tab_initialized = False
+        self.db_tab_initialized = False
 
         self.pack(fill=BOTH, expand=True)
         self._build_ui()
-        self._load_settings_into_ui()
+        
+        # Delay loading to ensure UI is ready
+        self.after(50, self._load_settings_into_ui)
 
     def _build_ui(self) -> None:
         self.grid_columnconfigure(0, weight=1)
@@ -191,7 +200,6 @@ class SettingsTab(ttk.Frame):
                     self.db_tab_initialized = True
                 if self.db_tab:
                     self.db_tab._refresh_db_info()
-
         except Exception as e:
             logger.error(f"Error handling settings tab change: {e}")
 
@@ -220,7 +228,6 @@ class SettingsTab(ttk.Frame):
             self.api_perf_tab.load_settings(config)
 
     def _handle_autostart(self, enable: bool) -> None:
-        """Manages the Windows Registry key for autostart."""
         if sys.platform != "win32" or not winreg:
             if enable:
                 self.autostart_var.set(False)
@@ -274,12 +281,10 @@ class SettingsTab(ttk.Frame):
                 winreg.HKEY_CURRENT_USER, REG_PATH, 0, winreg.KEY_WRITE
             ) as key:
                 if enable:
-                    winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, command)
-                    logger.info(f"Enabled autostart. Command: {command}")
+                    winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, command)
                 else:
                     try:
-                        winreg.DeleteValue(key, APP_NAME)
-                        logger.info("Disabled autostart.")
+                        winreg.DeleteValue(key, app_name)
                     except FileNotFoundError:
                         logger.info(
                             "Autostart was already disabled (registry key not found)."
@@ -421,6 +426,10 @@ class SettingsTab(ttk.Frame):
             self._handle_autostart(False)
             self._load_settings_into_ui(self.config_manager.get_default_config())
             self._save_settings()
+            
+            if current_runtime_version:
+                 CONFIG["version"] = current_runtime_version
+                 self.main_window.title(f"KaspaGateway Version {current_runtime_version}")
 
     def re_translate(self) -> None:
         """Delegates re-translation to all child tabs."""
@@ -429,12 +438,9 @@ class SettingsTab(ttk.Frame):
         ):
             self.outer_notebook.tab(i, text=f" {translate(key)} ")
 
-        if self.api_perf_tab:
-            self.api_perf_tab.re_translate()
-        if self.address_tab:
-            self.address_tab.re_translate()
-        if self.db_tab:
-            self.db_tab.re_translate()
+        if self.api_perf_tab: self.api_perf_tab.re_translate()
+        if self.address_tab: self.address_tab.re_translate()
+        if self.db_tab: self.db_tab.re_translate()
 
         self.save_button.config(text=translate("Save Settings"))
         self.reset_button.config(text=translate("Reset to Defaults"))

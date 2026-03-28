@@ -59,9 +59,8 @@ def _set_nested_value(d: Dict[str, Any], keys: Tuple[str, ...], value: Any) -> N
 
 class SettingsApiPerfTab(ttk.Frame):
     """
-    This class encapsulates the "API & Performance" tab, including its
-    three inner tabs: General, API Settings, and Performance Settings.
-    It is managed by the main SettingsTab.
+    This class encapsulates the "API & Performance" tab.
+    It acts as a sub-view for the main SettingsTab.
     """
 
     main_window: "MainWindow"
@@ -119,6 +118,7 @@ class SettingsApiPerfTab(ttk.Frame):
         super().__init__(parent)
         self.main_window: "MainWindow" = main_window
         self.config_manager = main_window.config_manager
+        self.settings_tab = settings_tab # Reference to parent for notifications
 
         self.entries: Dict[Tuple[str, ...], Any] = settings_tab.entries
         self.lang_vars: Dict[str, ttk.BooleanVar] = settings_tab.lang_vars
@@ -295,9 +295,7 @@ class SettingsApiPerfTab(ttk.Frame):
             self._create_path_setting_row(path_frame, i, label, key_tuple, key)
 
     def _build_performance_settings(self, parent: ttk.Frame) -> None:
-        """Builds the 'Performance' sub-tab UI."""
         parent.grid_columnconfigure(0, weight=1)
-
         api_lf = ttk.Labelframe(parent, text=translate("API Performance"), padding=10)
         api_lf.grid(row=0, column=0, sticky="nsew", padx=10, pady=(10, 5))
         api_lf.grid_columnconfigure(4, weight=1)
@@ -415,7 +413,6 @@ class SettingsApiPerfTab(ttk.Frame):
         )
 
     def _build_api_management_tab(self, parent: ttk.Frame) -> None:
-        """Builds the 'API Settings' sub-tab UI."""
         parent.grid_columnconfigure(0, weight=1, uniform="group1")
         parent.grid_columnconfigure(1, weight=3, uniform="group1")
         parent.grid_rowconfigure(0, weight=1)
@@ -562,7 +559,6 @@ class SettingsApiPerfTab(ttk.Frame):
         self.api_path_var.trace_add("write", self._on_path_change)
 
     def _is_private_ip(self, url: str) -> bool:
-        """Checks if a URL resolves to a private or loopback IP."""
         try:
             match: Optional[re.Match[str]] = re.match(r"^(?:https?://)?([^/:]+)", url)
             if not match:
@@ -584,11 +580,10 @@ class SettingsApiPerfTab(ttk.Frame):
             return True
 
     def _on_base_url_change(self, *args: Any) -> None:
-        """Handles changes to the Base URL combobox."""
-        if self._is_loading_api_ui:
-            return
-        if not (profile_name := self.profile_combo.get()):
-            return
+        if self._is_loading_api_ui: return
+        if not (profile_name := self.profile_combo.get()): return
+        new_base_url = self.api_base_url_var.get()
+        current_valid_base = _get_nested_value(CONFIG, ("api", "profiles", profile_name, "base_url"), "")
 
         new_base_url: str = self.api_base_url_var.get()
         current_valid_base: str = _get_nested_value(
@@ -602,7 +597,6 @@ class SettingsApiPerfTab(ttk.Frame):
             )
             self.api_base_url_var.set(current_valid_base)
             return
-
         if self._is_private_ip(new_base_url):
             messagebox.showerror(
                 translate("Invalid Input"),
@@ -634,35 +628,25 @@ class SettingsApiPerfTab(ttk.Frame):
             )
 
         self._update_full_url_preview()
+        self.settings_tab.notify_change() # Trigger smart save check
 
     def _on_path_change(self, *args: Any) -> None:
-        """Handles changes to the API Path entry."""
-        if self._is_loading_api_ui:
-            return
-        if not self.current_api_key_path:
-            return
-
-        key_name: str = self.current_api_key_path[-1]
-        if key_name == "base_url":
-            return
-
-        new_path: str = self.api_path_var.get()
-
+        if self._is_loading_api_ui or not self.current_api_key_path: return
+        key_name = self.current_api_key_path[-1]
+        if key_name == "base_url": return
+        new_path = self.api_path_var.get()
         if key_name == "page_limit":
-            try:
-                _set_nested_value(CONFIG, self.current_api_key_path, int(new_path))
-            except ValueError:
-                _set_nested_value(CONFIG, self.current_api_key_path, 500)
+            try: _set_nested_value(CONFIG, self.current_api_key_path, int(new_path))
+            except ValueError: _set_nested_value(CONFIG, self.current_api_key_path, 500)
         else:
-            base_url: str = self.api_base_url_var.get()
+            base_url = self.api_base_url_var.get()
             _set_nested_value(CONFIG, self.current_api_key_path, base_url + new_path)
-
         self._update_full_url_preview()
+        self.settings_tab.notify_change() # Trigger smart save check
 
     def _update_full_url_preview(self) -> None:
-        """Updates the read-only Full URL preview entry."""
-        base: str = self.api_base_url_var.get()
-        path: str = self.api_path_var.get()
+        base = self.api_base_url_var.get()
+        path = self.api_path_var.get()
         self.api_full_url_var.set(base + path)
 
     def _setup_selectable_list(
@@ -681,9 +665,7 @@ class SettingsApiPerfTab(ttk.Frame):
         self.labelframes[title_key] = lf
         container = ttk.Frame(lf)
         container.pack(fill=BOTH, expand=YES)
-
-        for i in range(num_cols):
-            container.grid_columnconfigure(i, weight=1)
+        for i in range(num_cols): container.grid_columnconfigure(i, weight=1)
 
         select_all_var = ttk.BooleanVar()
         var_dict: Dict[str, ttk.BooleanVar] = getattr(self, var_dict_name)
@@ -692,15 +674,14 @@ class SettingsApiPerfTab(ttk.Frame):
         )
 
         def on_toggle_all() -> None:
-            is_checked: bool = select_all_var.get()
-            for var in var_dict.values():
-                var.set(is_checked)
+            is_checked = select_all_var.get()
+            for var in var_dict.values(): var.set(is_checked)
+            # Notify change after bulk update
+            self.settings_tab.notify_change()
 
         def update_select_all_state(*args: Any) -> None:
-            if not var_dict:
-                return
-            all_checked: bool = all(var.get() for var in var_dict.values())
-            select_all_var.set(all_checked)
+            if not var_dict: return
+            select_all_var.set(all(var.get() for var in var_dict.values()))
 
         setattr(self, f"_update_{var_dict_name}_select_all", update_select_all_state)
 
@@ -719,13 +700,21 @@ class SettingsApiPerfTab(ttk.Frame):
 
         for i, (key, text) in enumerate(items_dict.items()):
             row, col_idx = (i // num_cols) + 2, i % num_cols
-            var = ttk.BooleanVar()
+            
+            is_selected = key in current_config_list
+            var = ttk.BooleanVar(value=is_selected)
+            
             var.trace_add("write", update_select_all_state)
+            
+            # --- CRITICAL FIX: Add trace to notify SettingsTab on change ---
+            var.trace_add("write", lambda *args: self.settings_tab.notify_change())
+            
             cb = ttk.Checkbutton(container, text=text, variable=var)
             cb.grid(row=row, column=col_idx, sticky="w", padx=5, pady=2)
             var_dict[key] = var
-            if cb_dict is not None:
-                cb_dict[key] = cb
+            if cb_dict is not None: cb_dict[key] = cb
+        
+        update_select_all_state()
 
     def _create_path_setting_row(
         self,
@@ -739,11 +728,9 @@ class SettingsApiPerfTab(ttk.Frame):
         label = ttk.Label(parent, text=translate(label_text_key))
         label.grid(row=row, column=0, sticky="w", padx=(0, 10), pady=5)
         self.path_labels[label_text_key] = label
-
         entry_frame = ttk.Frame(parent)
         entry_frame.grid(row=row, column=1, sticky="ew", pady=5)
         entry_frame.grid_columnconfigure(0, weight=1)
-
         widget = ttk.Entry(entry_frame, width=80)
         widget.grid(row=0, column=0, sticky="ew")
 
@@ -812,7 +799,7 @@ class SettingsApiPerfTab(ttk.Frame):
             )
             return
 
-        folder_name: str = os.path.basename(os.path.normpath(folder_path))
+        if not messagebox.askyesno(translate("Confirm Deletion"), f"{translate('Clear Folder Warning').format(os.path.basename(folder_path))}"): return
 
         if folder_key == "log":
             if not messagebox.askyesno(
@@ -858,9 +845,7 @@ class SettingsApiPerfTab(ttk.Frame):
             f"{translate('Clearing folder:')} {os.path.basename(folder_path)}...",
         )
         try:
-            logger.info("--- Log clearing process initiated by user ---")
             shutdown_file_handler()
-
             for item in os.listdir(folder_path):
                 item_path: str = os.path.join(folder_path, item)
                 if (
@@ -897,7 +882,6 @@ class SettingsApiPerfTab(ttk.Frame):
             )
         finally:
             self.after(100, lambda: self.main_window.log_tab.reattach_log_file())
-            self.after(0, self.main_window.status.update_status, "Ready")
 
     def _clear_generic_folder_worker(self, folder_path: str) -> None:
         """Worker thread to clear files from generic folders (e.g., export, backup)."""
@@ -939,12 +923,12 @@ class SettingsApiPerfTab(ttk.Frame):
             self.after(0, self.main_window.status.update_status, "Ready")
 
     def _browse_directory(self, widget: ttk.Entry) -> None:
-        """Opens a dialog to select a directory."""
-        path: str = filedialog.askdirectory(title=translate("Select Directory"))
+        path = filedialog.askdirectory(title=translate("Select Directory"))
         if path:
-            safe_path: str = sanitize_cli_arg(path)
-            widget.delete(0, END)
-            widget.insert(0, safe_path)
+            widget.delete(0, "end")
+            widget.insert(0, sanitize_cli_arg(path))
+            # Notify change after browsing
+            self.settings_tab.notify_change()
 
     def _create_setting_row(
         self,
@@ -966,7 +950,6 @@ class SettingsApiPerfTab(ttk.Frame):
         label = ttk.Label(label_frame, text=translate(label_text_key))
         label.pack(side=LEFT, anchor="w")
         self.api_perf_labels[label_text_key] = label
-
         if tooltip_text_key:
             info_icon = ttk.Label(
                 label_frame, text=" ⓘ", bootstyle="info", cursor="hand2"
@@ -978,6 +961,10 @@ class SettingsApiPerfTab(ttk.Frame):
 
         widget = ttk.Entry(parent, width=entry_width)
         widget.grid(row=grid_row, column=grid_col + 1, padx=padx, pady=pady, sticky="w")
+        
+        # --- FIX: Bind KeyRelease to notify changes ---
+        widget.bind("<KeyRelease>", lambda e: self.settings_tab.notify_change())
+        
         self.entries[config_key_tuple] = widget
 
     def _update_base_url_options(self) -> None:
@@ -989,7 +976,6 @@ class SettingsApiPerfTab(ttk.Frame):
             self.api_base_url_combo["values"] = self.base_url_options
 
     def _populate_profile_dropdown(self) -> None:
-        """Populates the API profile combobox with saved profiles."""
         self._update_base_url_options()
         profiles: List[str] = sorted(list(CONFIG["api"]["profiles"].keys()))
         self.profile_combo["values"] = profiles
@@ -1001,10 +987,8 @@ class SettingsApiPerfTab(ttk.Frame):
         self._on_profile_select()
 
     def _on_profile_select(self, event: Optional[Any] = None) -> None:
-        """Handles selection of a new API profile."""
         self._is_loading_api_ui = True
-
-        profile_name: str = self.profile_combo.get()
+        profile_name = self.profile_combo.get()
         if not profile_name:
             self._is_loading_api_ui = False
             return
@@ -1013,16 +997,14 @@ class SettingsApiPerfTab(ttk.Frame):
 
         self._update_base_url_options()
         self._populate_api_tree()
-
         self.api_key_var.set("")
         self.api_desc_var.set("")
         self.api_base_url_var.set("")
         self.api_path_var.set("")
         self.api_full_url_var.set("")
-        self.editor_lf.config(text=translate("Edit Endpoint"))
-
         self.current_api_key_path = None
         self._is_loading_api_ui = False
+        if hasattr(self, "settings_tab"): self.settings_tab.notify_change()
 
     def _populate_api_tree(self) -> None:
         """Populates the API endpoint treeview based on the selected profile."""
@@ -1063,9 +1045,8 @@ class SettingsApiPerfTab(ttk.Frame):
                 self.api_tree.insert(parent, "end", text=key, values=(key, section_key))
 
     def _on_api_select(self, event: Optional[Any] = None) -> None:
-        """Handles selection of an endpoint in the API tree."""
         self._is_loading_api_ui = True
-        sel: Tuple[str, ...] = self.api_tree.selection()
+        sel = self.api_tree.selection()
         if not sel:
             self._is_loading_api_ui = False
             return
@@ -1083,7 +1064,6 @@ class SettingsApiPerfTab(ttk.Frame):
         self.api_key_var.set(key)
         self.api_desc_var.set(translate(f"Tooltip_api_{key}"))
         self.editor_lf.config(text=f"{translate('Edit Endpoint')}: {key}")
-
         self.api_base_url_combo.config(state="normal")
         self.api_path_entry.config(state=NORMAL)
         self.api_base_url_label.config(text=translate("Base:"))
@@ -1112,10 +1092,7 @@ class SettingsApiPerfTab(ttk.Frame):
             )
             self.api_base_url_var.set(api_config.get("base_url", ""))
             self.api_base_url_combo.config(state=DISABLED)
-            self.api_path_label.config(text=f"{translate('Value')}:")
             self.api_path_var.set(str(api_config.get("page_limit", 500)))
-            self.api_full_url_label.grid_remove()
-            self.api_full_url_entry.grid_remove()
         else:
             self.current_api_key_path = (
                 "api",
@@ -1132,7 +1109,6 @@ class SettingsApiPerfTab(ttk.Frame):
                 path = full_url[len(base_url) :]
             self.api_base_url_var.set(base_url)
             self.api_path_var.set(path)
-
         self._update_full_url_preview()
         self._is_loading_api_ui = False
 
@@ -1145,10 +1121,10 @@ class SettingsApiPerfTab(ttk.Frame):
             )
             self._populate_profile_dropdown()
             self.profile_combo.set(new_name)
+            self.settings_tab.notify_change()
 
     def _rename_profile(self) -> None:
-        """Prompts to rename the currently selected profile."""
-        old_name: str = self.profile_combo.get()
+        old_name = self.profile_combo.get()
         if not old_name or old_name == "Default":
             messagebox.showwarning(
                 translate("Rename"), translate("Cannot rename default profile")
@@ -1171,10 +1147,10 @@ class SettingsApiPerfTab(ttk.Frame):
             if CONFIG["api"]["active_profile"] == old_name:
                 CONFIG["api"]["active_profile"] = new_name
             self._populate_profile_dropdown()
+            self.settings_tab.notify_change()
 
     def _delete_profile(self) -> None:
-        """Deletes the currently selected profile."""
-        profile_name: str = self.profile_combo.get()
+        profile_name = self.profile_combo.get()
         if not profile_name or profile_name == "Default":
             messagebox.showwarning(
                 translate("Delete"), translate("Cannot delete default profile")
@@ -1186,9 +1162,9 @@ class SettingsApiPerfTab(ttk.Frame):
             del CONFIG["api"]["profiles"][profile_name]
             CONFIG["api"]["active_profile"] = "Default"
             self._populate_profile_dropdown()
+            self.settings_tab.notify_change()
 
     def _reset_selected_api(self) -> None:
-        """Resets the selected API endpoint to its default value."""
         if self.current_api_key_path:
             default_value: Any = _get_nested_value(
                 DEFAULT_CONFIG,
@@ -1200,23 +1176,20 @@ class SettingsApiPerfTab(ttk.Frame):
             ]
 
             self._is_loading_api_ui = True
-            if self.current_api_key_path[-1] == "base_url":
-                self.api_base_url_var.set(default_value)
-            elif self.current_api_key_path[-1] == "page_limit":
-                self.api_path_var.set(str(default_value))
+            if self.current_api_key_path[-1] == "base_url": self.api_base_url_var.set(default_value)
+            elif self.current_api_key_path[-1] == "page_limit": self.api_path_var.set(str(default_value))
             else:
                 self.api_base_url_var.set(base_url_default)
                 path: str = default_value
                 if default_value.startswith(base_url_default):
                     path = default_value[len(base_url_default) :]
                 self.api_path_var.set(path)
-
             self._is_loading_api_ui = False
             self._on_base_url_change()
             self._on_path_change()
+            self.settings_tab.notify_change()
 
     def load_settings(self, config: Dict[str, Any]) -> None:
-        """Loads settings into this tab's widgets."""
         for key_tuple, widget in self.entries.items():
             value: Any = _get_nested_value(config, key_tuple)
             if isinstance(widget, ttk.BooleanVar):
@@ -1246,9 +1219,19 @@ class SettingsApiPerfTab(ttk.Frame):
         self._populate_profile_dropdown()
 
     def re_translate(self) -> None:
-        """Re-translates all widgets in this tab."""
-        for i, key in enumerate(["General", "API Settings", "Performance Settings"]):
-            self.inner_notebook.tab(i, text=translate(key))
+        for i, key in enumerate(["General", "API Settings", "Performance Settings"]): self.inner_notebook.tab(i, text=translate(key))
+        for d in [self.path_labels, self.api_perf_labels, self.labelframes]:
+            for key, widget in d.items(): widget.config(text=translate(key))
+        for key, tooltip in self.tooltips_widgets.items(): tooltip.text = translate(key)
+        
+        if hasattr(self, "auto_refresh_cb"): self.auto_refresh_cb.config(text=translate("Enable Auto-Refresh"))
+        if hasattr(self, "autostart_cb"): self.autostart_cb.config(text=translate("Start with Windows"))
+        if hasattr(self, "log_level_label"): self.log_level_label.config(text=f"{translate('Logging Level')}:")
+        
+        if hasattr(self, "general_tab"):
+            for widget in self.general_tab.winfo_children(): widget.destroy()
+            self._build_general_settings(self.general_tab)
+            self.load_settings(self.config_manager.get_config())
 
         for key, label_widget in self.path_labels.items():
             label_widget.config(text=translate(key))

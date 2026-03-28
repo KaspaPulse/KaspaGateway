@@ -104,7 +104,11 @@ class TextFile(threading.Thread):
                 logger.error(f"Error reading log file: {e}")
         finally:
             if self.file:
-                self.file.close()
+                try:
+                    self.file.close()
+                except OSError:
+                    # Ignore errors during file closing, specifically "Bad file descriptor"
+                    pass
 
     def update_text(self, line: str, log_level: str) -> None:
         """

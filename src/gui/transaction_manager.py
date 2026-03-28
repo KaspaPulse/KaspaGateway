@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
-"""
-Manages the fetching, processing, and database persistence of Kaspa transactions.
-
-This module coordinates background threads for fetching transaction data from the API,
-processing raw JSON data into a structured format, saving it to the
-TransactionDB, and queuing UI updates for the main window.
-"""
-
 from __future__ import annotations
 
 import json
@@ -22,7 +13,6 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tupl
 
 import pandas as pd
 from ttkbootstrap.toast import ToastNotification
-
 from src.api.network import _make_api_request
 from src.config.config import CONFIG, get_active_api_config
 from src.database.db_locker import release_lock
@@ -37,7 +27,6 @@ if TYPE_CHECKING:
     from src.gui.main_window import MainWindow
 
 logger = logging.getLogger(__name__)
-
 
 @log_performance
 def _process_raw_transactions(
@@ -66,6 +55,7 @@ def _process_raw_transactions(
     )
 
     for tx in raw_txs:
+        if not tx.get("is_accepted", False): continue
         try:
             # *** Real filtering happens here ***
             if not tx.get("is_accepted", False):
@@ -198,8 +188,7 @@ class TransactionManager:
         self.main_window.current_address = address
         self.is_fetching = True
         self._cancel_event.clear()
-
-        if self.winfo_exists():
+        if self.main_window.winfo_exists():
             self.main_window.after(0, self.main_window._set_ui_for_processing, True)
 
         if force and self.winfo_exists():
@@ -208,8 +197,7 @@ class TransactionManager:
 
         self.start_time = time.time()
         self.main_window.status.update_status("Starting transaction download...")
-
-        if self.winfo_exists():
+        if self.main_window.winfo_exists():
             self.main_window.start_ui_update_loop(self.ui_update_queue)
 
         self._fetch_thread = threading.Thread(
@@ -220,10 +208,8 @@ class TransactionManager:
         )
         self._fetch_thread.start()
 
-    def stop_fetch(self) -> None:
-        """Signals the cancellation event to stop the active fetch."""
+    def stop_fetch(self):
         if self.is_fetching:
-            logger.info("Fetch cancellation requested by user.")
             self._cancel_event.set()
 
     @log_performance
@@ -287,13 +273,12 @@ class TransactionManager:
                 else "outgoing"
             )
 
+    def _get_common_filters(self, f):
+        f = f or {}
+        s_dt, e_dt = f.get("start_date"), f.get("end_date")
         return {
-            "start_ts": start_ts,
-            "end_ts": end_ts,
-            "type_filter": type_filter,
-            "direction_filter": direction_filter,
-            "all_type_keys": all_type_keys,
-            "all_direction_keys": all_direction_keys,
+            "start_ts": int(s_dt.timestamp()) if s_dt else 0,
+            "end_ts": int(e_dt.timestamp()) + 86399 if e_dt else float("inf"),
         }
 
     def _apply_filters_to_df(
@@ -737,7 +722,6 @@ class TransactionManager:
                 duration=3000,
             ).show_toast()
         finally:
-            # 4. Re-initialize connections
             self.main_window.reinitialize_databases()
 
             # 5. Re-enable UI

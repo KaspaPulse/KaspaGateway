@@ -8,10 +8,10 @@ This utility creates .lock files alongside database files to prevent multiple
 instances of the application from running simultaneously.
 
 It critically handles stale locks left behind by crashed processes by:
-1.  Checking if the PID in the .lock file is still active.
-2.  If the PID is dead, it removes both the stale .lock file AND
-    the associated .duckdb.wal file, which resolves the
-    "database is locked" IOException on the next startup.
+1. Checking if the PID in the .lock file is still active.
+2. If the PID is dead, it removes both the stale .lock file AND
+   the associated .duckdb.wal file, which resolves the
+   "database is locked" IOException on the next startup.
 """
 
 import atexit
@@ -37,14 +37,29 @@ _lock_dir: str = ""
 
 
 def _get_lock_path(db_name: str) -> str:
-    """Returns the full path for a database's .lock file."""
+    """
+    Returns the full path for a database's .lock file.
+    """
+    if not _lock_dir:
+        _initialize_lock_dir(CONFIG)
     return os.path.join(_lock_dir, f"{db_name}.lock")
 
 
 def _get_wal_path(db_name: str) -> str:
-    """Returns the full path for a database's .wal file."""
-    base_path = os.path.join(_lock_dir, db_name)
+    """
+    Returns the full path for a database's .wal file.
+    """
+    base_path: str = os.path.join(_lock_dir, db_name)
     return f"{base_path}.wal"
+
+
+def _initialize_lock_dir(config: Dict[str, Any]) -> None:
+    """
+    Initializes the global lock directory variable.
+    """
+    global _lock_dir
+    _lock_dir = config.get("paths", {}).get("database", ".")
+    os.makedirs(_lock_dir, exist_ok=True)
 
 
 def _cleanup_stale_lock(db_name: str, lock_path: str) -> bool:
@@ -98,19 +113,18 @@ def _cleanup_stale_lock(db_name: str, lock_path: str) -> bool:
 
     except OSError as e:
         logger.error(f"Failed to clean up stale lock/WAL for {db_name}: {e}")
-        return False  # Failed to clean up, safer to abort
+        return False
 
 
 def acquire_lock(db_name: str) -> bool:
     """
     Attempts to acquire an exclusive, process-aware lock for a database.
     """
-    global _lock_dir
     if not _lock_dir:
         _lock_dir = CONFIG.get("paths", {}).get("database", ".")
         os.makedirs(_lock_dir, exist_ok=True)
 
-    lock_path = _get_lock_path(db_name)
+    lock_path: str = _get_lock_path(db_name)
 
     try:
         if os.path.exists(lock_path):
@@ -142,19 +156,24 @@ def acquire_lock(db_name: str) -> bool:
 def release_lock(db_name: str) -> None:
     """
     Releases the lock for a specific database, cleaning up both .lock and .wal files.
+    Safely handles file descriptor closure to avoid OSError 9 (Bad file descriptor).
     """
     if db_name not in _held_locks:
         return
 
-    fd = _held_locks.pop(db_name)
-    lock_path = _get_lock_path(db_name)
-    wal_path = _get_wal_path(db_name)
+    fd: int = _held_locks.pop(db_name)
+    lock_path: str = _get_lock_path(db_name)
+    wal_path: str = _get_wal_path(db_name)
 
     try:
         # Close the file handle
+        # We catch OSError in case the OS has already invalidated the handle
         os.close(fd)
     except OSError as e:
-        logger.warning(f"Could not close lock file handle for {db_name}: {e}")
+        # Errno 9 is "Bad file descriptor", which means it's already closed.
+        # This is benign during shutdown or rapid restart cycles.
+        if e.errno != 9:
+            logger.warning(f"Could not close lock file handle for {db_name}: {e}")
 
     try:
         # Remove the .lock file
@@ -164,7 +183,7 @@ def release_lock(db_name: str) -> None:
         logger.error(f"Failed to remove lock file {lock_path}: {e}")
 
     try:
-        # Remove the .wal file on clean exit
+        # Remove the .wal file on clean exit to ensure clean startup
         if os.path.exists(wal_path):
             os.remove(wal_path)
             logger.debug(f"Cleanly removed WAL file: {wal_path}")

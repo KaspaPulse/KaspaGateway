@@ -1,13 +1,6 @@
 # File: src/config/config.py
 """
 Handles loading, saving, and providing access to the application's configuration.
-This module is responsible for:
-- Defining default settings.
-- Locating and managing user data paths.
-- Loading user 'config.json' from disk.
-- Merging user config with defaults.
-- Handling secure credential storage (API keys) using 'keyring'.
-- Migrating old config formats to new ones.
 """
 
 from __future__ import annotations
@@ -111,6 +104,7 @@ CONFIG_FILE: str = ""
 CONFIG: Dict[str, Any] = {}
 DEFAULT_CONFIG: Dict[str, Any] = {}
 
+# --- Constants & Defaults ---
 
 SUPPORTED_CURRENCIES: List[str] = [
     "usd",
@@ -131,6 +125,7 @@ SUPPORTED_CURRENCIES: List[str] = [
     "sgd",
     "brl",
 ]
+
 SUPPORTED_LANGUAGES: List[str] = [
     "en",
     "ar",
@@ -145,6 +140,7 @@ SUPPORTED_LANGUAGES: List[str] = [
     "zh-CN",
     "id",
 ]
+
 SUPPORTED_TABS: List[str] = [
     "Explorer",
     "Kaspa Node",
@@ -173,6 +169,7 @@ CURRENCY_SYMBOLS: Dict[str, str] = {
     "sgd": "S$",
     "brl": "R$",
 }
+
 CURRENCY_TRANSLATION_KEYS: Dict[str, str] = {
     "usd": "currency_usd",
     "sar": "currency_sar",
@@ -220,9 +217,62 @@ DEFAULT_API_PROFILE: Dict[str, Any] = {
     },
 }
 
+# --- Helper Functions ---
+
+def _get_keyring_service_name() -> str:
+    try:
+        username: str = getpass.getuser()
+    except Exception:
+        username = "default_user"
+    return f"{APP_NAME}-{username}"
+
+def get_project_root() -> str:
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return sys._MEIPASS
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+def get_assets_path(relative_path: str) -> str:
+    return os.path.join(get_project_root(), "assets", relative_path)
+
+def get_user_data_root(custom_path: Optional[str] = None) -> str:
+    default_root: str = os.path.join(
+        os.getenv("LOCALAPPDATA", os.getenv("APPDATA", "")), APP_NAME
+    )
+    path: str = default_root
+    use_default: bool = False
+
+    if custom_path:
+        if '"' in custom_path:
+            logger.error('Invalid custom_path. Falling back to default.')
+            use_default = True
+        else:
+            try:
+                safe_root_abs: str = os.path.abspath(default_root)
+                user_path_abs: str = os.path.abspath(custom_path)
+                if user_path_abs.startswith(safe_root_abs) or os.path.isabs(user_path_abs):
+                    path = user_path_abs
+                    logger.info(f"Using custom user data path: {path}")
+                else:
+                    logger.warning("Custom path suspicious. Falling back.")
+                    use_default = True
+            except Exception as e:
+                logger.error(f"Error processing custom_path: {e}")
+                use_default = True
+
+    if use_default:
+        path = os.path.abspath(default_root)
+
+    try:
+        os.makedirs(path, exist_ok=True)
+    except OSError as e:
+        logger.critical(f"Could not create user data directory: {e}")
+        path = os.path.abspath(os.path.join(get_project_root(), "user_data"))
+        os.makedirs(path, exist_ok=True)
+    return path
+
+# --- Encryption / Decryption ---
 
 def _encrypt(data: str) -> str:
-    """Encrypts data using the OS keyring."""
     if not data:
         return ""
 
@@ -230,7 +280,6 @@ def _encrypt(data: str) -> str:
     username: str = "api_key"
     try:
         keyring.set_password(service, username, data)
-        logger.info("API key successfully migrated to secure OS keyring.")
         return f"keyring_managed:{service}:{username}"
     except Exception as e:
         logger.error(
@@ -238,12 +287,9 @@ def _encrypt(data: str) -> str:
         )
         return data
 
-
 def _decrypt(data: str) -> str:
-    """Decrypts data from the OS keyring or handles legacy/unencrypted data."""
     if not data:
         return ""
-
     if data.startswith("keyring_managed:"):
         try:
             _, service, username = data.split(":", 2)
@@ -298,9 +344,9 @@ def _recursive_decrypt(d: Any) -> Any:
         return [_recursive_decrypt(item) for item in d]
     return d
 
+# --- Configuration Management ---
 
 def _initialize_defaults(user_data_root: str) -> None:
-    """Sets the global DEFAULT_CONFIG dictionary."""
     global DEFAULT_CONFIG
     DEFAULT_CONFIG = {
         "version": APP_VERSION,
@@ -366,7 +412,6 @@ def _recursive_update(
             d[k] = v
     return d
 
-
 def _migrate_config(user_config: Dict[str, Any]) -> Dict[str, Any]:
     """Migrates old config structures to new ones."""
     if "api" in user_config and "profiles" not in user_config.get("api", {}):
@@ -396,23 +441,27 @@ def _migrate_config(user_config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _save_config_file(config: Dict[str, Any]) -> None:
-    """Saves the configuration dictionary to the CONFIG_FILE."""
+    """
+    Saves the config.json to disk.
+    CRITICAL: Always forces 'version' to APP_VERSION (1.0.0) on disk
+    to prevent git hashes or dev tags from breaking version checks later.
+    """
     try:
         encrypted_config: Dict[str, Any] = _recursive_encrypt(config)
         os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
         encrypted_config["version"] = APP_VERSION
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(encrypted_config, f, indent=4, sort_keys=True)
+        logger.info(f"Configuration saved to {CONFIG_FILE}")
     except OSError as e:
-        logger.error(f"Failed to save configuration to '{CONFIG_FILE}': {e}")
+        logger.error(f"Failed to save configuration: {e}")
         raise
 
-
 def load_config() -> Dict[str, Any]:
-    """Loads config from file, merging with defaults and handling migrations."""
     if not os.path.exists(CONFIG_FILE):
         _save_config_file(DEFAULT_CONFIG)
         return DEFAULT_CONFIG.copy()
+
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             user_config: Dict[str, Any] = json.load(f)
@@ -443,16 +492,15 @@ def load_config() -> Dict[str, Any]:
 
             final_config["version"] = APP_VERSION
             _save_config_file(final_config)
-            logger.info("Configuration file has been upgraded to the new version.")
 
         return final_config
+
     except (json.JSONDecodeError, OSError) as e:
         logger.error(
             f"Error reading config file '{CONFIG_FILE}': {e}. Reverting to defaults."
         )
         _save_config_file(DEFAULT_CONFIG)
         return DEFAULT_CONFIG.copy()
-
 
 def get_active_api_config() -> Dict[str, Any]:
     """Gets the currently active API profile configuration."""
@@ -465,10 +513,6 @@ def get_active_api_config() -> Dict[str, Any]:
 
 
 def initialize_config(custom_path: Optional[str] = None) -> None:
-    """
-    Initializes the configuration system by setting paths, loading defaults,
-    and loading the user's config into the global CONFIG variable.
-    """
     global USER_DATA_ROOT, CONFIG_FILE, CONFIG
     USER_DATA_ROOT = get_user_data_root(custom_path)
     CONFIG_FILE = os.path.join(USER_DATA_ROOT, "config.json")

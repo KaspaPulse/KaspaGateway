@@ -2,10 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 Defines the database interaction classes for each DuckDB database file.
-
-This module provides specialized classes (TransactionDB, AddressDB, AppDataDB)
-that inherit from DatabaseManager. Each class manages the specific schema
-and queries for its corresponding database file.
 """
 
 from __future__ import annotations
@@ -62,30 +58,26 @@ class TransactionDB(DatabaseManager):
 
     @retry_on_schema_error(initialize_tx_schema)
     def get_total_transaction_count(self) -> int:
-        """Returns the total number of transactions in the database."""
         result = self.fetch_one("SELECT COUNT(*) FROM transactions")
         return result[0] if result else 0
 
     @log_performance
     @retry_on_schema_error(initialize_tx_schema)
     def delete_transactions_for_address(self, address: str) -> bool:
-        """Deletes all transactions associated with a specific address."""
         logger.info(f"Deleting all transactions for address: {mask_address(address)}")
         query = "DELETE FROM transactions WHERE address = ?"
-        return self.execute_query(query, (address,))
+        return self.execute_query(query, (address.lower(),))
 
     @log_performance
     @retry_on_schema_error(initialize_tx_schema)
     def get_existing_txids(self, address: str) -> Set[str]:
-        """Gets all existing TXIDs for an address to prevent duplicates."""
         query = "SELECT txid FROM transactions WHERE address = ?"
-        results = self.fetch_all(query, (address,))
+        results = self.fetch_all(query, (address.lower(),))
         return {row[0] for row in results}
 
     @log_performance
     @retry_on_schema_error(initialize_tx_schema)
     def upsert_transactions_df(self, df: pd.DataFrame) -> bool:
-        """Inserts or updates transactions from a DataFrame."""
         if df.empty:
             return True
         try:
@@ -112,9 +104,7 @@ class TransactionDB(DatabaseManager):
         **kwargs: Any,
     ) -> List[Dict[str, Any]]:
         """
-        Filters transactions for a given address based on multiple criteria.
-        Handles translated filter values.
-        Returns data as a list of dictionaries.
+        Filters transactions for a given address.
         """
         query = "SELECT * FROM transactions WHERE address = ?"
         params: List[Any] = [address]
@@ -149,6 +139,9 @@ class TransactionDB(DatabaseManager):
             params.extend([like_query, like_query, like_query])
 
         query += " ORDER BY timestamp DESC"
+
+        # LOG THE QUERY FOR DEBUGGING
+        logger.debug(f"Executing Filter Query: {query} | Params: {params}")
 
         try:
             with self.connect(read_only=True) as con:
@@ -201,7 +194,6 @@ class AddressDB(DatabaseManager):
 
     @retry_on_schema_error(initialize_addr_schema)
     def migrate_schema(self) -> None:
-        """Applies any necessary schema migrations."""
         try:
             with self.connect() as con:
                 columns: List[Tuple[Any, ...]] = con.execute(
@@ -225,7 +217,6 @@ class AddressDB(DatabaseManager):
 
     @retry_on_schema_error(initialize_addr_schema)
     def get_all_addresses(self) -> List[Dict[str, Any]]:
-        """Retrieves all saved addresses."""
         query = "SELECT address, name, created_at FROM addresses ORDER BY name, created_at DESC"
         results: List[Tuple[str, str, int]] = self.fetch_all(query)
         return [
@@ -234,7 +225,6 @@ class AddressDB(DatabaseManager):
 
     @retry_on_schema_error(initialize_addr_schema)
     def save_address(self, address: str, name: str) -> bool:
-        """Saves or updates an address. The 'created_at' column relies on its DEFAULT value."""
         query = (
             "INSERT INTO addresses (address, name) VALUES (?, ?) "
             "ON CONFLICT(address) DO UPDATE SET name = excluded.name"
@@ -243,13 +233,11 @@ class AddressDB(DatabaseManager):
 
     @retry_on_schema_error(initialize_addr_schema)
     def delete_address(self, address: str) -> bool:
-        """Deletes an address."""
         query = "DELETE FROM addresses WHERE address = ?"
         return self.execute_query(query, (address,))
 
     @retry_on_schema_error(initialize_addr_schema)
     def get_total_address_count(self) -> int:
-        """Returns the total number of saved addresses."""
         result = self.fetch_one("SELECT COUNT(*) FROM addresses")
         return result[0] if result else 0
 
@@ -279,14 +267,12 @@ class AppDataDB(DatabaseManager):
 
     @retry_on_schema_error(initialize_app_data_schema)
     def get_user_state(self, key: str) -> Optional[str]:
-        """Retrieves a value from the user_state table."""
         query = "SELECT value FROM user_state WHERE key = ?"
         result = self.fetch_one(query, (key,))
         return result[0] if result else None
 
     @retry_on_schema_error(initialize_app_data_schema)
     def save_user_state(self, key: str, value: str) -> None:
-        """Saves a key-value pair to the user_state table."""
         query = "INSERT OR REPLACE INTO user_state (key, value) VALUES (?, ?)"
         self.execute_query(query, (key, value))
 
@@ -304,7 +290,6 @@ class AppDataDB(DatabaseManager):
 
         prices_data: str = result[0]
         try:
-            # Attempt to parse as JSON.
             return json.loads(prices_data)
         except json.JSONDecodeError as e:
             # The 'ast.literal_eval' fallback has been removed to prevent
@@ -321,7 +306,6 @@ class AppDataDB(DatabaseManager):
 
     @retry_on_schema_error(initialize_app_data_schema)
     def save_cached_prices(self, prices_json: str) -> None:
-        """Saves prices to the cache."""
         query = "INSERT OR REPLACE INTO cache (key, prices_json, last_updated) VALUES ('prices', ?, NOW())"
         self.execute_query(query, (prices_json,))
 
@@ -357,19 +341,16 @@ class AppDataDB(DatabaseManager):
 
     @retry_on_schema_error(initialize_app_data_schema)
     def get_cached_prices_count(self) -> int:
-        """Returns the number of cached price points."""
         result = self.fetch_one("SELECT COUNT(*) FROM cache WHERE key = 'prices'")
         return result[0] if result else 0
 
     @retry_on_schema_error(initialize_app_data_schema)
     def clear_caches(self) -> None:
-        """Clears all cached data."""
         self.execute_query("DELETE FROM cache")
 
     @log_performance
     @retry_on_schema_error(initialize_app_data_schema)
     def save_address_names(self, names_list: List[Dict[str, str]]) -> None:
-        """Saves a list of known address names, replacing old ones."""
         query = "INSERT OR REPLACE INTO known_names (address, name) VALUES (?, ?)"
         data: List[Tuple[str, str]] = [
             (item["address"], item["name"])
@@ -391,14 +372,12 @@ class AppDataDB(DatabaseManager):
     @log_performance
     @retry_on_schema_error(initialize_app_data_schema)
     def get_address_names_map(self) -> Dict[str, str]:
-        """Returns all known names as a dictionary map."""
         query = "SELECT address, name FROM known_names"
         results: List[Tuple[str, str]] = self.fetch_all(query)
         return {row[0]: row[1] for row in results}
 
     @retry_on_schema_error(initialize_app_data_schema)
     def get_address_names_count(self) -> int:
-        """Returns the total number of known names."""
         result = self.fetch_one("SELECT COUNT(*) FROM known_names")
         return result[0] if result else 0
 

@@ -6,7 +6,8 @@ Main entry point for the KaspaGateway application.
 
 This script initializes configuration, sets up logging, handles file locking,
 initializes the main application class (KaspaApp), and runs the
-Tkinter main event loop.
+Tkinter main event loop. It also establishes a Windows Job Object to ensure
+clean termination of child processes.
 """
 
 from __future__ import annotations

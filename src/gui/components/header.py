@@ -48,8 +48,9 @@ class Header(ttk.Frame):
             currency_callback,
         )
 
-    def _open_link(self, url):
-        webbrowser.open(url, new=2)
+        # UI Component References
+        self.title_label: Optional[ttk.Label] = None
+        self.version_label: Optional[ttk.Label] = None
 
     def _build_ui(
         self,
@@ -61,6 +62,8 @@ class Header(ttk.Frame):
         currency_callback,
     ):
         self.grid_columnconfigure(1, weight=1)
+
+        # --- Left Section (Branding & Stats) ---
         left_frame = ttk.Frame(self)
         left_frame.grid(row=0, column=0, sticky="w", padx=0, pady=5)
 
@@ -84,8 +87,12 @@ class Header(ttk.Frame):
         )
         self.version_label.pack(side=LEFT, anchor="s", padx=(0, 15))
 
-        style = ttk.Style()
-        link_font = "-size 8 -underline 1"
+        self.title_label = ttk.Label(
+            branding_frame,
+            text=translate("KaspaGateway"),
+            font="-size 16 -weight bold",
+        )
+        self.title_label.pack(side=LEFT, anchor="w")
 
         links_frame = ttk.Frame(sub_title_frame)
         links_frame.pack(side=LEFT, anchor="s")
@@ -158,6 +165,7 @@ class Header(ttk.Frame):
         self.hashrate_tooltip = ToolTip(self.hashrate_frame, text="N/A")
         self.difficulty_tooltip = ToolTip(self.difficulty_frame, text="N/A")
 
+        # --- Right Section (Controls & Clock) ---
         right_frame = ttk.Frame(self)
         right_frame.grid(row=0, column=2, sticky="e", padx=0, pady=5)
 
@@ -243,7 +251,14 @@ class Header(ttk.Frame):
             self.main_window._apply_currency_change(new_selection)
         self.currency_combo.set(self.currency_var.get())
 
-    def _setup_language_dropdown(self):
+        if self.currency_combo:
+            self.currency_combo["values"] = displayed
+            if self.currency_var.get().upper() not in displayed:
+                self.currency_var.set(displayed[0] if displayed else "USD")
+            self.currency_combo.set(self.currency_var.get())
+
+    def _setup_language_dropdown(self) -> None:
+        """Populates the language combobox with available languages."""
         all_langs = get_available_languages()
         displayed_lang_codes = CONFIG["display"]["displayed_languages"]
         display_langs = [
@@ -289,7 +304,14 @@ class Header(ttk.Frame):
             )
         self.lang_combo.set(display_val)
 
-    def _create_stat_frame(self, parent, title_key, value_var, bootstyle):
+    def _create_stat_frame(
+        self,
+        parent: ttk.Frame,
+        title_key: str,
+        value_var: ttk.StringVar,
+        bootstyle: str,
+    ) -> Tuple[ttk.Label, ttk.Frame]:
+        """Creates a compact styled frame for displaying a statistic."""
         frame = ttk.Frame(parent)
         frame.pack(side=LEFT, padx=10, anchor="s")
         label_frame = ttk.Frame(frame)
@@ -326,7 +348,8 @@ class Header(ttk.Frame):
         else:
             self.price_tooltip.text = "N/A"
 
-    def update_network_tooltip(self, timestamp: int):
+    def update_network_tooltip(self, timestamp: int) -> None:
+        """Updates the tooltip for network stats."""
         if timestamp > 0:
             dt_object = datetime.fromtimestamp(timestamp)
             formatted_time = dt_object.strftime("%Y-%m-%d %H:%M:%S")
@@ -336,8 +359,29 @@ class Header(ttk.Frame):
             self.hashrate_tooltip.text = tooltip_text
             self.difficulty_tooltip.text = tooltip_text
         else:
-            self.hashrate_tooltip.text = "N/A"
-            self.difficulty_tooltip.text = "N/A"
+            if self.hashrate_tooltip:
+                self.hashrate_tooltip.text = "N/A"
+            if self.difficulty_tooltip:
+                self.difficulty_tooltip.text = "N/A"
+
+    def re_translate(self) -> None:
+        """Updates translations for all static text in the header."""
+        if self.title_label:
+            self.title_label.config(text=translate("KaspaGateway"))
+        if self.version_label:
+            self.version_label.config(text=f"v{CONFIG.get('version', '1.0.0')}")
+        if self.price_label:
+            self.price_label.config(text=translate("Price"))
+        if self.hashrate_label:
+            self.hashrate_label.config(text=translate("Hashrate"))
+        if self.difficulty_label:
+            self.difficulty_label.config(text=translate("Difficulty"))
+        if self.lang_label:
+            self.lang_label.config(text=f"{translate('Language')}:")
+        if self.theme_label:
+            self.theme_label.config(text=f"{translate('Theme')}:")
+        if self.currency_label:
+            self.currency_label.config(text=f"{translate('Currency')}:")
 
     def re_translate(self):
         self.title_label.config(text=translate("KaspaGateway"))

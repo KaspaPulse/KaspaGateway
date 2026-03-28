@@ -48,7 +48,6 @@ from src.utils.validation import (
     _sanitize_for_logging,
     sanitize_cli_arg,
     validate_ip_port,
-    validate_url,
 )
 
 if sys.platform == "win32":
@@ -281,8 +280,8 @@ class BridgeInstanceController:
             (self.stratum_port_var, "stratum_port_var", default_stratum),
             (self.prom_port_var, "prom_port_var", default_prom),
             (self.hcp_var, "hcp_var", ""),
-            (self.min_diff_var, "min_diff_var", "4096"),
-            (self.shares_per_min_var, "shares_per_min_var", "20"),
+            (self.min_diff_var, "min_diff_var", "8192"),
+            (self.shares_per_min_var, "shares_per_min_var", "30"),
             (self.vardiff_var, "vardiff_var", True),
             (self.pow2clamp_var, "pow2clamp_var", True),
             (self.log_file_var, "log_file_var", True),
@@ -587,7 +586,7 @@ class BridgeInstanceController:
             ).show_toast()
 
     def autostart_if_enabled(self, is_autostart: bool = False) -> None:
-        """Start the bridge if the autostart checkbox is ticked."""
+        """Checks if autostart is enabled and triggers the start sequence."""
         if self.autostart_var.get():
             delay_sec = self.startup_delay_var.get()
             if is_autostart and delay_sec > 0:
@@ -836,6 +835,7 @@ class BridgeInstanceController:
                 )
         finally:
             self.is_updating = False
+
             if self.view.winfo_exists():
                 self.view.after(0, self.set_controls_state, True)
 
@@ -1576,6 +1576,113 @@ class BridgeInstanceController:
             creationflags=subprocess.CREATE_NO_WINDOW,
             text=False,
         )
+
+    def _assign_job_object(self) -> None:
+        """Assigns the process to a Windows Job Object if applicable."""
+        if (
+            sys.platform == "win32"
+            and CONFIG.get("job_object_handle")
+            and ctypes
+            and self.bridge_process
+        ):
+            job_handle = CONFIG.get("job_object_handle")
+            if job_handle:
+                try:
+                    pid = self.bridge_process.pid
+                    PROCESS_SET_QUOTA_AND_TERMINATE = 0x0101
+                    h_process = ctypes.windll.kernel32.OpenProcess(
+                        PROCESS_SET_QUOTA_AND_TERMINATE, False, pid
+                    )
+
+                    if h_process:
+                        if ctypes.windll.kernel32.AssignProcessToJobObject(
+                            job_handle, h_process
+                        ):
+                            logger.info(f"Assigned ks_bridge (PID: {pid}) to Job Object.")
+                        else:
+                            err = ctypes.windll.kernel32.GetLastError()
+                            logger.error(f"Failed assign ks_bridge to Job Object. Error: {err}")
+                        ctypes.windll.kernel32.CloseHandle(h_process)
+                    else:
+                        err = ctypes.windll.kernel32.GetLastError()
+                        logger.error(f"Failed open ks_bridge process. Error: {err}")
+                except Exception as e:
+                    logger.error(f"Job Object assignment failed: {e}", exc_info=True)
+
+    def start_bridge(self, is_autostart: bool = False) -> None:
+        """
+        Start the kaspa-stratum-bridge subprocess.
+        Refactored to use helper methods for clarity and reduced complexity.
+        """
+        if self._is_bridge_running():
+            self.log_message(f"{translate('Bridge is already running.')}", "WARN")
+            return
+
+        self._stop_requested = False
+
+        if self._check_external_conflicts(is_autostart):
+            return
+
+        try:
+            exe_path, config_path = self._resolve_executable_and_config()
+        except Exception as e:
+            self.log_message(f"Error parsing command/paths: {e}", "ERROR")
+            if not is_autostart:
+                messagebox.showerror(translate("Invalid Input"), f"Error: {e}")
+            return
+
+        if self._is_blocked_shell(exe_path, is_autostart):
+            return
+
+        if not self._validate_files(exe_path, config_path, is_autostart):
+            return
+
+        # Re-build command list with validated paths (implicitly handled by instance vars update)
+        command_list = self.build_args_from_settings()
+        # Override the 0th element to ensure it matches the validated exe path
+        if command_list:
+            command_list[0] = self.bridge_exe_path
+        
+        if not self._validate_ip_args(command_list, is_autostart):
+            return
+
+        command_str = " ".join(command_list)
+        working_dir = os.path.dirname(self.config_yaml_path)
+
+        self.log_message(f"--- {translate('Starting Bridge')} ---", "INFO")
+        self.log_message(f"{translate('Working Directory')}:\n{_sanitize_for_logging(working_dir)}", "DEBUG")
+        self.log_message(f"{translate('Command')}:\n{command_str}", "DEBUG")
+        self.log_message("...", "INFO")
+
+        try:
+            self._launch_subprocess(command_list, working_dir)
+            self.running_command_str = command_str
+            self._assign_job_object()
+
+            # --- PRIORITY BOOST FOR MINING PERFORMANCE ---
+            # Raise priority to ABOVE_NORMAL to reduce block propagation latency
+            if self.bridge_process and psutil:
+                try:
+                    proc = psutil.Process(self.bridge_process.pid)
+                    # Windows: ABOVE_NORMAL_PRIORITY_CLASS
+                    # Linux/Mac: nice value (lower is higher priority, requires permissions usually)
+                    if sys.platform == "win32":
+                        proc.nice(psutil.ABOVE_NORMAL_PRIORITY_CLASS)
+                        self.log_message("Bridge process priority set to ABOVE_NORMAL for lower latency.", "INFO")
+                    else:
+                        # On Linux/Unix non-root users can only increase nice value (lower priority)
+                        # Attempting to lower nice value (raise priority) might fail without root
+                        try:
+                            proc.nice(-5) 
+                            self.log_message("Bridge process nice value set to -5.", "INFO")
+                        except psutil.AccessDenied:
+                            self.log_message("Could not raise process priority (requires root/admin).", "WARN")
+
+                except Exception as e:
+                    logger.error(f"Failed to set process priority: {e}")
+
+        except Exception as e:
+             raise e
 
     def _assign_job_object(self) -> None:
         """Assigns the process to a Windows Job Object if applicable."""

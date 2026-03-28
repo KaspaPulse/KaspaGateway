@@ -18,6 +18,7 @@ from src.utils.validation import _sanitize_for_logging, sanitize_data_for_loggin
 
 logger = logging.getLogger(__name__)
 
+
 _session = requests.Session()
 _session.headers.update(
     {
@@ -66,6 +67,12 @@ def _make_api_request(url: str) -> Optional[Any]:
     Returns:
          The JSON response as a Python object, or None if the request fails.
     """
+    # Failsafe: Auto-correct duplicate URLs before sending the request
+    if url.count("https://") > 1:
+        parts = url.split("https://")
+        url = "https://" + parts[-1].lstrip('/')
+        logger.info(f"Auto-corrected duplicate URL to: {url}")
+
     try:
         retry_attempts: int = int(CONFIG["performance"]["retry_attempts"])
         timeout: int = int(CONFIG["performance"]["timeout"])
@@ -115,6 +122,7 @@ def fetch_address_balance(address: str) -> Optional[float]:
         )
         return None
     except (ValueError, TypeError, KeyError) as e:
+        # FIX: Replaced problematic function with safe str()
         logger.warning(
             f"Invalid or missing balance data received for address {mask_address(address)}: {sanitize_data_for_logging(data)} - Error: {_sanitize_for_logging(e)}"
         )

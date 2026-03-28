@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-import queue
 import threading
 from contextlib import contextmanager
 from typing import Any, Dict, Iterator, List, Optional, Tuple, TypeAlias
@@ -17,33 +16,30 @@ logger = logging.getLogger(__name__)
 
 class ConnectionPool:
     """
-    Manages a pool of connections for a single DuckDB database file.
+    Manages a single shared connection for a DuckDB database file.
 
-    This pool handles DuckDB's limitation of (by default) not allowing
-    multiple connections from the same process to a writeable file by
-    managing a single set of connections.
+    DuckDB operates best in embedded mode with a single connection instance
+    shared across threads. This class ensures only one writeable connection
+    exists per database file to prevent transaction conflicts.
     """
 
-    def __init__(self, db_path: str, max_connections: int = 5):
+    def __init__(self, db_path: str, max_connections: int = 1) -> None:
         """
-        Initializes the connection pool.
-
+        Initializes the connection manager.
+        
         Args:
             db_path: The path to the DuckDB database file.
-            max_connections: The maximum number of connections to keep in the pool.
+            max_connections: Ignored in this implementation to enforce singleton pattern.
         """
         self.db_path: str = db_path
-        self.max_connections: int = max_connections
-        self.config: Dict[str, Any] = {}  # For any other DuckDB config options
-        self._pool: queue.Queue[DuckDBPyConnection] = queue.Queue(
-            maxsize=max_connections
-        )
+        self.config: Dict[str, Any] = {}
+        self._shared_connection: Optional[DuckDBPyConnection] = None
         self._lock: threading.Lock = threading.Lock()
-        self.connection_count: int = 0
-        logger.debug(f"ConnectionPool initialized for {os.path.basename(db_path)}")
+        
+        logger.debug(f"SingleConnectionManager initialized for {os.path.basename(db_path)}")
 
     def _create_connection(self, read_only: bool = False) -> DuckDBPyConnection:
-        """Creates a new database connection."""
+        """Creates the underlying DuckDB connection."""
         try:
             base_name = os.path.basename(self.db_path)
             logger.debug(
@@ -51,7 +47,7 @@ class ConnectionPool:
             )
             # Pass read_only as a direct argument
             return duckdb.connect(
-                database=self.db_path, read_only=read_only, config=self.config
+                database=self.db_path, read_only=False, config=self.config
             )
         except Exception as e:
             logger.error(
@@ -94,8 +90,8 @@ class ConnectionPool:
 
     def return_connection(self, conn: DuckDBPyConnection) -> None:
         """
-        Returns a connection to the pool or closes it if the pool is full.
-        Also decrements the connection count when closing.
+        No-op: The connection is kept open for the lifetime of the application
+        to avoid file locking overhead and transaction conflicts.
         """
         with self._lock:
             base_name = os.path.basename(self.db_path)
@@ -112,7 +108,7 @@ class ConnectionPool:
                 self._pool.put(conn)
 
     def close_all(self) -> None:
-        """Closes all connections currently in the pool and resets the count."""
+        """Closes the shared connection safely."""
         with self._lock:
             base_name = os.path.basename(self.db_path)
             logger.warning(
@@ -120,10 +116,7 @@ class ConnectionPool:
             )
             while not self._pool.empty():
                 try:
-                    conn = self._pool.get_nowait()
-                    conn.close()
-                except queue.Empty:
-                    break
+                    self._shared_connection.close()
                 except Exception as e:
                     logger.error(f"Error closing a connection: {e}")
             logger.info(
@@ -135,11 +128,10 @@ class ConnectionPool:
 class DatabaseManager:
     """
     Base class for database managers.
-    Each subclass (TransactionDB, AddressDB, etc.) will create its own
-    instance of this class and its own connection pool.
+    Handles thread-safe query execution using a shared connection.
     """
 
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str) -> None:
         if not db_path:
             raise ValueError("Database path cannot be None or empty.")
 
@@ -154,9 +146,7 @@ class DatabaseManager:
     @contextmanager
     def connect(self, read_only: bool = False) -> Iterator[DuckDBPyConnection]:
         """
-        Provides a database connection from the pool as a context manager.
-        Note: The read_only flag is passed to get_connection but may be
-        ignored by the pool to maintain connection compatibility.
+        Provides the shared database connection as a context manager.
         """
         conn: Optional[DuckDBPyConnection] = None
         try:
@@ -169,8 +159,8 @@ class DatabaseManager:
             )
             raise ConnectionError(f"Failed to establish database connection: {e}")
         finally:
-            if conn:
-                self.connection_pool.return_connection(conn)
+            # Connection is maintained by the pool, no closure here
+            pass
 
     def execute_query(
         self, query: str, params: Tuple[Any, ...] = (), read_only: bool = False
