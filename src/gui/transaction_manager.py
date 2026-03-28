@@ -123,7 +123,7 @@ class TransactionManager:
     def _perform_fetch_loop(self, address, criteria, q, prices, status, existing_ids, is_full):
         api = get_active_api_config()
         limit = api.get("page_limit", 500)
-        base = api["base_url"]
+        base = api.get("base_url", "")
         ep = api["endpoints"]["full_transactions"]
         
         start_ts = criteria["start_ts"]
@@ -135,9 +135,19 @@ class TransactionManager:
         while True:
             if self._cancel_event.is_set(): break
             
-            url = f"{base}{ep.format(kaspaAddress=address, limit=limit, offset=offset)}"
+            # FIX: Prevent URL duplication
+            ep_formatted = ep.format(kaspaAddress=address, limit=limit, offset=offset)
+            if ep_formatted.startswith("http"):
+                url = ep_formatted
+            else:
+                base_clean = base.rstrip('/')
+                ep_clean = ep_formatted.lstrip('/')
+                url = f"{base_clean}/{ep_clean}"
+            
             raw = _make_api_request(url)
-            if not raw: 
+            
+            # FIX: Stop only if no data at all
+            if not raw or len(raw) == 0: 
                 logger.info("Fetch loop: No more data from API.")
                 break
 
@@ -147,17 +157,14 @@ class TransactionManager:
             
             logger.info(f"Batch: Range {oldest_in_batch}-{newest_in_batch} | Target Start {start_ts}")
 
-            # CRITICAL FIX: 
-            # Only stop if the NEWEST transaction in this batch is older than our start date filter.
-            # This ensures we keep fetching until we reach the relevant time window.
-            if newest_in_batch < start_ts:
+            # Logical stop: if the newest transaction in the batch is older than the start date
+            if newest_in_batch > 0 and newest_in_batch < start_ts:
                 logger.info(f"Stopping fetch: Batch entirely before start date ({newest_in_batch} < {start_ts}).")
                 break
                 
             valid_txs = []
             for tx in raw:
                 ts = int(tx.get("block_time", 0)) // 1000
-                # Skip individual transactions outside range, but continue batch
                 if ts < start_ts or ts > end_ts: continue
                 if not is_full and tx.get("transaction_id") in existing_ids: continue
                 valid_txs.append(tx)
@@ -166,12 +173,9 @@ class TransactionManager:
                 df = _process_raw_transactions(valid_txs, address, prices)
                 if not df.empty:
                     q.put(df)
-                    # Send directly to UI queue for immediate feedback
                     self.ui_update_queue.put(df.copy())
             
-            if len(raw) < limit:
-                break
-            
+            # FIX: Removed premature break and increment offset correctly
             offset += len(raw)
 
     def _fetch_worker(self, address, force, filters):
