@@ -1,8 +1,11 @@
+<<<<<<< HEAD
 # File: src/gui/tabs/settings_address_tab.py
 """
 This class encapsulates the "Manage Addresses" tab in the settings.
 """
 
+=======
+>>>>>>> dev-latest
 from __future__ import annotations
 
 import json
@@ -13,10 +16,17 @@ import tkinter as tk
 import webbrowser
 from datetime import datetime
 from tkinter import filedialog, messagebox
+<<<<<<< HEAD
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import DANGER, DISABLED, INFO, LEFT, NORMAL, SUCCESS, VERTICAL
+=======
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, cast
+
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
+>>>>>>> dev-latest
 from ttkbootstrap.toast import ToastNotification
 
 from src.api.network import fetch_address_balance
@@ -25,6 +35,10 @@ from src.utils.i18n import translate
 from src.utils.validation import sanitize_input_string, validate_kaspa_address
 
 if TYPE_CHECKING:
+<<<<<<< HEAD
+=======
+    from src.database.db_manager import DatabaseManager
+>>>>>>> dev-latest
     from src.gui.address_manager import AddressManager
     from src.gui.config_manager import ConfigManager
     from src.gui.main_window import MainWindow
@@ -38,6 +52,10 @@ class SettingsAddressTab(ttk.Frame):
     It is managed by the main SettingsTab.
     """
 
+<<<<<<< HEAD
+=======
+    # --- Type Hint Declarations ---
+>>>>>>> dev-latest
     main_window: "MainWindow"
     config_manager: "ConfigManager"
     address_manager: "AddressManager"
@@ -58,11 +76,19 @@ class SettingsAddressTab(ttk.Frame):
 
     def __init__(self, parent: ttk.Frame, main_window: "MainWindow") -> None:
         super().__init__(parent)
+<<<<<<< HEAD
         self.main_window = main_window
         self.config_manager = main_window.config_manager
         self.address_manager = main_window.address_manager
 
         self.address_sort_info = {"column": "name", "reverse": False}
+=======
+        self.main_window: "MainWindow" = main_window
+        self.config_manager: "ConfigManager" = main_window.config_manager
+        self.address_manager: "AddressManager" = main_window.address_manager
+
+        self.address_sort_info: Dict[str, Any] = {"column": "name", "reverse": False}
+>>>>>>> dev-latest
 
         self._configure_address_tab()
 
@@ -163,14 +189,22 @@ class SettingsAddressTab(ttk.Frame):
 
     def _sort_addresses_by_column(self, col_id: str) -> None:
         """Sorts the address list treeview by the clicked column."""
+<<<<<<< HEAD
         sort_map = {
+=======
+        sort_map: Dict[str, str] = {
+>>>>>>> dev-latest
             "Name": "name",
             "Known Name": "known_name",
             "Address": "address",
             "Balance": "balance_float",
             "Value": "balance_float",
         }
+<<<<<<< HEAD
         sort_key = sort_map.get(col_id)
+=======
+        sort_key: Optional[str] = sort_map.get(col_id)
+>>>>>>> dev-latest
         if not sort_key:
             return
 
@@ -206,29 +240,48 @@ class SettingsAddressTab(ttk.Frame):
                 addr["balance_str"] = translate("Loading...")
 
             def sort_key_func(item: Dict[str, Any]) -> Any:
+<<<<<<< HEAD
                 val = item.get(self.address_sort_info["column"])
+=======
+                val: Any = item.get(self.address_sort_info["column"])
+>>>>>>> dev-latest
                 if isinstance(val, (int, float)):
                     return val
                 return str(val).lower() if val else ""
 
+<<<<<<< HEAD
             sorted_addresses = sorted(
                 addresses, key=sort_key_func, reverse=self.address_sort_info["reverse"]
             )
             item_ids_addresses_to_fetch = []
+=======
+            sorted_addresses: List[Dict[str, Any]] = sorted(
+                addresses, key=sort_key_func, reverse=self.address_sort_info["reverse"]
+            )
+            item_ids_addresses_to_fetch: List[Tuple[str, str]] = []
+>>>>>>> dev-latest
 
             def insert_rows() -> None:
                 """Inserts rows into the treeview on the main thread."""
                 for addr_data in sorted_addresses:
                     if not self.winfo_exists():
                         return
+<<<<<<< HEAD
                     values = (
+=======
+                    values: Tuple[str, ...] = (
+>>>>>>> dev-latest
                         addr_data.get("name", ""),
                         addr_data["address"],
                         addr_data["known_name"],
                         addr_data["balance_str"],
                         translate("Loading..."),
                     )
+<<<<<<< HEAD
                     item_id = self.address_tree.insert("", "end", values=values)
+=======
+                    item_id: str = self.address_tree.insert("", "end", values=values)
+>>>>>>> dev-latest
                     item_ids_addresses_to_fetch.append((item_id, addr_data["address"]))
                 self.after(
                     100, self._fetch_balances_for_tree, item_ids_addresses_to_fetch
@@ -262,6 +315,7 @@ class SettingsAddressTab(ttk.Frame):
 
     def _fetch_single_balance(self, item_id: str, address: str) -> None:
         """Worker thread to fetch balance for a single address."""
+<<<<<<< HEAD
         balance = fetch_address_balance(address)
         balance_str = f"{balance:,.2f} KAS" if balance is not None else translate("N/A")
         value_str = translate("N/A")
@@ -271,6 +325,21 @@ class SettingsAddressTab(ttk.Frame):
             currency_code = self.main_window.currency_var.get().lower()
             price = prices.get(currency_code, 0.0)
             value = balance * price
+=======
+        balance: Optional[float] = fetch_address_balance(address)
+        balance_str: str = (
+            f"{balance:,.2f} KAS" if balance is not None else translate("N/A")
+        )
+        value_str: str = translate("N/A")
+
+        if balance is not None:
+            prices: Dict[str, float] = (
+                self.main_window.price_updater.get_current_prices()
+            )
+            currency_code: str = self.main_window.currency_var.get().lower()
+            price: float = prices.get(currency_code, 0.0)
+            value: float = balance * price
+>>>>>>> dev-latest
             value_str = f"{value:,.2f}" if price > 0 else translate("N/A")
 
         def update_ui() -> None:
@@ -291,9 +360,15 @@ class SettingsAddressTab(ttk.Frame):
 
         self.explorer_btn.config(state=NORMAL)
 
+<<<<<<< HEAD
         item_values = self.address_tree.item(sel[0])["values"]
         name = item_values[0]
         addr = item_values[1]
+=======
+        item_values: List[str] = self.address_tree.item(sel[0])["values"]
+        name: str = item_values[0]
+        addr: str = item_values[1]
+>>>>>>> dev-latest
 
         self.name_entry.delete(0, tk.END)
         self.name_entry.insert(0, name)
@@ -331,7 +406,11 @@ class SettingsAddressTab(ttk.Frame):
         if not sel:
             return
 
+<<<<<<< HEAD
         addr = self.address_tree.item(sel[0])["values"][1]
+=======
+        addr: str = self.address_tree.item(sel[0])["values"][1]
+>>>>>>> dev-latest
         if messagebox.askyesno(
             translate("Delete Address"), f"{translate('Delete')} {addr}?"
         ):
@@ -346,9 +425,15 @@ class SettingsAddressTab(ttk.Frame):
         if not sel:
             return
 
+<<<<<<< HEAD
         addr = self.address_tree.item(sel[0])["values"][1]
         api_config = get_active_api_config()
         url = api_config["explorer"]["address"].format(kaspaAddress=addr)
+=======
+        addr: str = self.address_tree.item(sel[0])["values"][1]
+        api_config: Dict[str, Any] = get_active_api_config()
+        url: str = api_config["explorer"]["address"].format(kaspaAddress=addr)
+>>>>>>> dev-latest
         if url:
             webbrowser.open(url, new=2)
 
@@ -364,9 +449,15 @@ class SettingsAddressTab(ttk.Frame):
             ).show_toast()
             return
 
+<<<<<<< HEAD
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         initial_filename = f"kaspa_addresses_{ts}.json"
         export_dir = CONFIG.get("paths", {}).get("export", ".")
+=======
+        ts: str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        initial_filename: str = f"kaspa_addresses_{ts}.json"
+        export_dir: str = CONFIG.get("paths", {}).get("export", ".")
+>>>>>>> dev-latest
         os.makedirs(export_dir, exist_ok=True)
 
         file_path = filedialog.asksaveasfilename(
@@ -395,7 +486,11 @@ class SettingsAddressTab(ttk.Frame):
         if file_path:
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
+<<<<<<< HEAD
                     data = json.load(f)
+=======
+                    data: Any = json.load(f)
+>>>>>>> dev-latest
 
                 imported_count = 0
                 if isinstance(data, list):
@@ -406,6 +501,10 @@ class SettingsAddressTab(ttk.Frame):
                             and "name" in item
                             and validate_kaspa_address(item["address"])
                         ):
+<<<<<<< HEAD
+=======
+
+>>>>>>> dev-latest
                             self.address_manager.save_address(
                                 item["address"], sanitize_input_string(item["name"])
                             )

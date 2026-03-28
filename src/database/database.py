@@ -39,6 +39,16 @@ class TransactionDB(DatabaseManager):
     def __init__(
         self, db_path: str, schema_init: Callable[[DuckDBPyConnection], None]
     ) -> None:
+<<<<<<< HEAD
+=======
+        """
+        Initializes the TransactionDB.
+
+        Args:
+            db_path: The file path to the database.
+            schema_init: The function to call to initialize the schema.
+        """
+>>>>>>> dev-latest
         super().__init__(db_path)
         try:
             with self.connect() as con:
@@ -76,8 +86,12 @@ class TransactionDB(DatabaseManager):
         try:
             with self.connect() as con:
                 con.register("df_view", df)
+<<<<<<< HEAD
                 # CRITICAL FIX: "BY NAME" ensures columns match by name, not position.
                 con.execute("INSERT OR REPLACE INTO transactions BY NAME SELECT * FROM df_view")
+=======
+                con.execute("INSERT OR REPLACE INTO transactions SELECT * FROM df_view")
+>>>>>>> dev-latest
             return True
         except Exception as e:
             logger.error(
@@ -101,7 +115,11 @@ class TransactionDB(DatabaseManager):
         Filters transactions for a given address.
         """
         query = "SELECT * FROM transactions WHERE address = ?"
+<<<<<<< HEAD
         params: List[Any] = [address.lower()]
+=======
+        params: List[Any] = [address]
+>>>>>>> dev-latest
 
         if start_date:
             query += " AND timestamp >= ?"
@@ -169,6 +187,16 @@ class AddressDB(DatabaseManager):
     def __init__(
         self, db_path: str, schema_init: Callable[[DuckDBPyConnection], None]
     ) -> None:
+<<<<<<< HEAD
+=======
+        """
+        Initializes the AddressDB.
+
+        Args:
+            db_path: The file path to the database.
+            schema_init: The function to call to initialize the schema.
+        """
+>>>>>>> dev-latest
         super().__init__(db_path)
         try:
             with self.connect() as con:
@@ -235,6 +263,16 @@ class AppDataDB(DatabaseManager):
     def __init__(
         self, db_path: str, schema_init: Callable[[DuckDBPyConnection], None]
     ) -> None:
+<<<<<<< HEAD
+=======
+        """
+        Initializes the AppDataDB.
+
+        Args:
+            db_path: The file path to the database.
+            schema_init: The function to call to initialize the schema.
+        """
+>>>>>>> dev-latest
         super().__init__(db_path)
         try:
             with self.connect() as con:
@@ -258,6 +296,10 @@ class AppDataDB(DatabaseManager):
 
     @retry_on_schema_error(initialize_app_data_schema)
     def get_cached_prices(self, expired: bool = False) -> Optional[Dict[str, float]]:
+<<<<<<< HEAD
+=======
+        """RetrieVes cached prices, handling only valid JSON."""
+>>>>>>> dev-latest
         query = "SELECT prices_json, last_updated FROM cache WHERE key = 'prices'"
         if not expired:
             query += " AND last_updated >= NOW() - INTERVAL '1 hour'"
@@ -271,6 +313,12 @@ class AppDataDB(DatabaseManager):
         try:
             return json.loads(prices_data)
         except json.JSONDecodeError as e:
+<<<<<<< HEAD
+=======
+            # The 'ast.literal_eval' fallback has been removed to prevent
+            # potential DoS attacks from malformed legacy cache data.
+            # If it's not valid JSON, treat it as invalid and clear it.
+>>>>>>> dev-latest
             logger.error(
                 f"Failed to parse cached prices as JSON. Clearing invalid cache entry. Error: {e}"
             )
@@ -289,6 +337,10 @@ class AppDataDB(DatabaseManager):
     def get_cached_network_data(
         self, expired: bool = False
     ) -> Optional[Tuple[Optional[float], Optional[float]]]:
+<<<<<<< HEAD
+=======
+        """RetrieVes cached network data (hashrate, difficulty)."""
+>>>>>>> dev-latest
         query = (
             "SELECT prices_json, last_updated FROM cache WHERE key = 'network_stats'"
         )
@@ -309,6 +361,10 @@ class AppDataDB(DatabaseManager):
     def save_cached_network_data(
         self, hashrate: Optional[float], difficulty: Optional[float]
     ) -> None:
+<<<<<<< HEAD
+=======
+        """Saves network data to the cache."""
+>>>>>>> dev-latest
         data_json = json.dumps({"hashrate": hashrate, "difficulty": difficulty})
         query = "INSERT OR REPLACE INTO cache (key, prices_json, last_updated) VALUES ('network_stats', ?, NOW())"
         self.execute_query(query, (data_json,))
@@ -357,8 +413,17 @@ class AppDataDB(DatabaseManager):
 
     @retry_on_schema_error(initialize_app_data_schema)
     def get_last_update_timestamp(self) -> Optional[str]:
+<<<<<<< HEAD
+=======
+        """Retrieves the saved 'published_at' timestamp of the last known update."""
+>>>>>>> dev-latest
         return self.get_user_state("last_update_timestamp")
 
     @retry_on_schema_error(initialize_app_data_schema)
     def save_last_update_timestamp(self, timestamp: str) -> None:
+<<<<<<< HEAD
         self.save_user_state("last_update_timestamp", timestamp)
+=======
+        """Saves the 'published_at' timestamp of the latest update."""
+        self.save_user_state("last_update_timestamp", timestamp)
+>>>>>>> dev-latest

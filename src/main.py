@@ -22,7 +22,11 @@ import tkinter as tk
 import traceback
 from tkinter import messagebox
 from types import FrameType
+<<<<<<< HEAD
 from typing import Optional
+=======
+from typing import Any, List, Optional
+>>>>>>> dev-latest
 
 # --- Path Setup ---
 if not getattr(sys, "frozen", False):
@@ -99,13 +103,18 @@ def main() -> None:
     # all child processes (kaspad, ks_bridge) are terminated by the OS.
 
     # We will store the handle in the global CONFIG so controllers can access it.
+<<<<<<< HEAD
     CONFIG["job_object_handle"] = None
+=======
+    CONFIG["job_object_handle"]: Optional[int] = None
+>>>>>>> dev-latest
 
     if sys.platform == "win32":
         try:
             import ctypes
             from ctypes import wintypes
 
+<<<<<<< HEAD
             # Define necessary Windows structures for Job Objects
             class IO_COUNTERS(ctypes.Structure):
                 _fields_ = [
@@ -117,6 +126,8 @@ def main() -> None:
                     ("OtherTransferCount", ctypes.c_ulonglong),
                 ]
 
+=======
+>>>>>>> dev-latest
             class JOBOBJECT_BASIC_LIMIT_INFORMATION(ctypes.Structure):
                 _fields_ = [
                     ("PerProcessUserTimeLimit", wintypes.LARGE_INTEGER),
@@ -133,7 +144,11 @@ def main() -> None:
             class JOBOBJECT_EXTENDED_LIMIT_INFORMATION(ctypes.Structure):
                 _fields_ = [
                     ("BasicLimitInformation", JOBOBJECT_BASIC_LIMIT_INFORMATION),
+<<<<<<< HEAD
                     ("IoInfo", IO_COUNTERS),
+=======
+                    ("IoInfo", ctypes.c_void_p),  # IO_COUNTERS
+>>>>>>> dev-latest
                     ("ProcessMemoryLimit", ctypes.c_size_t),
                     ("JobMemoryLimit", ctypes.c_size_t),
                     ("PeakProcessMemoryUsed", ctypes.c_size_t),
@@ -145,10 +160,14 @@ def main() -> None:
             JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: int = 0x00002000
 
             def create_job_object() -> Optional[int]:
+<<<<<<< HEAD
                 """
                 Creates a Windows Job Object and configures it to terminate all
                 associated processes when the job handle is closed.
                 """
+=======
+                """Creates a Job Object and sets it to kill all child processes when it closes."""
+>>>>>>> dev-latest
                 try:
                     kernel32 = ctypes.windll.kernel32
                     job_handle: int = kernel32.CreateJobObjectW(None, None)

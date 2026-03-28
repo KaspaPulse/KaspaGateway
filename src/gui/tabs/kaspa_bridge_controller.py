@@ -4,6 +4,8 @@
 Contains the Controller (logic and state) for the BridgeInstanceTab (View).
 This file handles all business logic, state management, and subprocess
 interactions for a single ks_bridge instance.
+
+Refactored to improve code modularity, type safety, and maintainability.
 """
 
 from __future__ import annotations
@@ -11,9 +13,14 @@ from __future__ import annotations
 import logging
 import os
 import re
+<<<<<<< HEAD
+=======
+import shlex
+>>>>>>> dev-latest
 import subprocess
 import sys
 import threading
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from typing import (
@@ -25,11 +32,19 @@ from typing import (
     Optional,
     Set,
     Tuple,
+<<<<<<< HEAD
+=======
+    cast,
+>>>>>>> dev-latest
 )
 
 import psutil
 import ttkbootstrap as ttk
+<<<<<<< HEAD
 from ttkbootstrap.constants import SUCCESS
+=======
+from ttkbootstrap.constants import DANGER, DISABLED, NORMAL, SUCCESS, X
+>>>>>>> dev-latest
 from ttkbootstrap.toast import ToastNotification
 
 from src.config.config import CONFIG
@@ -54,8 +69,13 @@ if sys.platform == "win32":
         ctypes = None  # type: ignore
         wintypes = None  # type: ignore
 else:
+<<<<<<< HEAD
     ctypes = None
     wintypes = None
+=======
+    ctypes = None  # type: ignore
+    wintypes = None  # type: ignore
+>>>>>>> dev-latest
 
 if TYPE_CHECKING:
     from src.gui.config_manager import ConfigManager
@@ -74,6 +94,10 @@ class BridgeInstanceController:
     Manages all state and logic, interacting with BridgeInstanceTab (View).
     """
 
+<<<<<<< HEAD
+=======
+    # --- Class Attribute Type Declarations ---
+>>>>>>> dev-latest
     view: BridgeInstanceTab
     main_window: MainWindow
     config_manager: ConfigManager
@@ -94,7 +118,11 @@ class BridgeInstanceController:
     flag_key_to_enabled_var_map: Dict[str, ttk.BooleanVar]
     _stop_requested: bool
 
+<<<<<<< HEAD
     # TK Variables
+=======
+    # --- TK Variable Declarations ---
+>>>>>>> dev-latest
     kaspa_addr_var: Tuple[ttk.StringVar, ttk.StringVar]
     stratum_port_var: ttk.StringVar
     prom_port_var: ttk.StringVar
@@ -138,6 +166,10 @@ class BridgeInstanceController:
     log_file_enabled_var: ttk.BooleanVar
     console_stats_enabled_var: ttk.BooleanVar
     vardiff_stats_enabled_var: ttk.BooleanVar
+<<<<<<< HEAD
+=======
+    # --- End Variable Declarations ---
+>>>>>>> dev-latest
 
     def __init__(
         self,
@@ -201,6 +233,7 @@ class BridgeInstanceController:
         self.stratum_port_var = ttk.StringVar(value=default_stratum)
         self.prom_port_var = ttk.StringVar(value=default_prom)
         self.hcp_var = ttk.StringVar(value="")
+<<<<<<< HEAD
 
         # OPTIMIZED DEFAULTS FOR 10 BPS (100ms block time)
         # Increased min_diff to reduce spam on high speed network
@@ -210,6 +243,11 @@ class BridgeInstanceController:
         # Reduced blockwait to 50ms (half of 10BPS block time) to ensure freshness
         self.blockwait_var = ttk.StringVar(value="50ms")
         
+=======
+        self.min_diff_var = ttk.StringVar(value="4096")
+        self.shares_per_min_var = ttk.StringVar(value="20")
+        self.blockwait_var = ttk.StringVar(value="250ms")
+>>>>>>> dev-latest
         self.extranonce_var = ttk.StringVar(
             value="0" if self.instance_id == "_1" else "2"
         )
@@ -242,7 +280,10 @@ class BridgeInstanceController:
         )
 
         self.vardiff_var = ttk.StringVar(value=self._bool_to_str(True))
+<<<<<<< HEAD
         # Force pow2clamp to True by default for ASICs on 10BPS
+=======
+>>>>>>> dev-latest
         self.pow2clamp_var = ttk.StringVar(value=self._bool_to_str(True))
         self.log_file_var = ttk.StringVar(value=self._bool_to_str(True))
         self.console_stats_var = ttk.StringVar(value=self._bool_to_str(True))
@@ -287,7 +328,11 @@ class BridgeInstanceController:
             (self.log_file_var, "log_file_var", True),
             (self.console_stats_var, "console_stats_var", True),
             (self.vardiff_stats_var, "vardiff_stats_var", True),
+<<<<<<< HEAD
             (self.blockwait_var, "blockwait_var", "50ms"),
+=======
+            (self.blockwait_var, "blockwait_var", "250ms"),
+>>>>>>> dev-latest
             (
                 self.bridge_download_url_var,
                 "bridge_download_url_var",
@@ -1055,7 +1100,11 @@ class BridgeInstanceController:
             self._update_ui_after_exit()
         except (tk.TclError, RuntimeError):
             pass
+<<<<<<< HEAD
          
+=======
+        
+>>>>>>> dev-latest
         self.bridge_process = None
         
         try:
@@ -1130,6 +1179,7 @@ class BridgeInstanceController:
                 if self.view.winfo_exists(): self.on_process_exit()
             except tk.TclError:
                 pass
+<<<<<<< HEAD
 
     def _check_for_external_process(self) -> None:
         """Scans for external ks_bridge processes, ignoring other managed instances."""
@@ -1174,6 +1224,52 @@ class BridgeInstanceController:
                 self.view.external_process_frame.pack(
                     fill=X, expand=True, pady=(5, 0), ipady=5
                 )
+=======
+
+    def _check_for_external_process(self) -> None:
+        """Scans for external ks_bridge processes, ignoring other managed instances."""
+        self.external_process_pids.clear()
+        my_pid = self.bridge_process.pid if self.bridge_process else None
+
+        managed_pids: Set[Optional[int]] = {my_pid}
+        if self.main_bridge_tab:
+            self._add_managed_pids(managed_pids, self.main_bridge_tab.bridge1_tab_instance)
+            self._add_managed_pids(managed_pids, self.main_bridge_tab.bridge2_tab_instance)
+
+        try:
+            for proc in psutil.process_iter(["pid", "name"]):
+                if (
+                    proc.name().lower() == "ks_bridge.exe"
+                    and proc.pid not in managed_pids
+                ):
+                    self.external_process_pids.append(proc.pid)
+
+            if self.external_process_pids:
+                logger.warning(
+                    f"Found external ks_bridge.exe (PIDs: {self.external_process_pids}). Managed PIDs: {managed_pids}"
+                )
+        except Exception as e:
+            logger.warning(f"Failed to scan for external processes: {e}")
+
+        self._update_external_process_ui()
+
+    def _add_managed_pids(self, pid_set: Set[Optional[int]], tab_instance: Optional[BridgeInstanceTab]) -> None:
+        if tab_instance and tab_instance.controller.bridge_process:
+            pid_set.add(tab_instance.controller.bridge_process.pid)
+
+    def _update_external_process_ui(self) -> None:
+        """Shows or hides the external process warning frame."""
+        try:
+            if self.external_process_pids:
+                pids_str = ", ".join(map(str, self.external_process_pids))
+                msg = translate(
+                    "External ks_bridge.exe found (PID: {}). Stop it to run the bridge here."
+                ).format(pids_str)
+                self.view.external_process_label.config(text=msg)
+                self.view.external_process_frame.pack(
+                    fill=X, expand=True, pady=(5, 0), ipady=5
+                )
+>>>>>>> dev-latest
             else:
                 self.view.external_process_frame.pack_forget()
         except tk.TclError:
@@ -1219,6 +1315,7 @@ class BridgeInstanceController:
             messagebox.showerror(
                 translate("Error"),
                 f"Failed to stop PIDs: {', '.join(map(str, failed_pids))}",
+<<<<<<< HEAD
             )
 
         self.view.after(500, self._check_for_external_process)
@@ -1235,10 +1332,29 @@ class BridgeInstanceController:
             )
             return
 
+=======
+            )
+
+        self.view.after(500, self._check_for_external_process)
+
+    def _delete_bridge_files(self) -> None:
+        """Delete the bridge exe, config, and version files."""
+        try:
+            if not self._validate_deletion_safety():
+                return
+        except Exception as e:
+            self.log_message(
+                f"Error during security check: {_sanitize_for_logging(e)}",
+                "ERROR",
+            )
+            return
+
+>>>>>>> dev-latest
         if self._is_bridge_running():
             self.log_message(translate("Error: Process is running."), "ERROR")
             messagebox.showerror(
                 translate("Error"), translate("Error: Process is running.")
+<<<<<<< HEAD
             )
             return
 
@@ -1576,7 +1692,427 @@ class BridgeInstanceController:
                 startupinfo=startupinfo,
                 creationflags=subprocess.CREATE_NO_WINDOW,
                 text=False,
+=======
+>>>>>>> dev-latest
             )
+            return
+
+        exe_path = self.bridge_exe_path
+        config_path = self.config_yaml_path
+        ver_path = f"{exe_path}.version"
+
+        if not self._confirm_deletion(exe_path, config_path, ver_path):
+            return
+
+        try:
+            self._perform_deletion(exe_path, config_path, ver_path)
+            if self.version_checker:
+                self.version_checker.check_version()
+            self._check_local_bridge_version()
+            ToastNotification(
+                title=translate("Delete Files"),
+                message=translate("Files deleted successfully."),
+                bootstyle=SUCCESS,
+                duration=3000,
+            ).show_toast()
+        except Exception as e:
+            self._handle_deletion_error(e)
+
+    def _validate_deletion_safety(self) -> bool:
+        """Confirms that deletion paths are within the app's data directory."""
+        safe_dir_local = os.path.abspath(
+            os.path.join(os.getenv("LOCALAPPDATA", ""), "KaspaGateway")
+        )
+        safe_dir_roaming = os.path.abspath(
+            os.path.join(os.getenv("APPDATA", ""), "KaspaGateway")
+        )
+        
+        target_exe_path = os.path.abspath(self.bridge_exe_path)
+        target_config_path = os.path.abspath(self.config_yaml_path)
+        target_version_path = f"{target_exe_path}.version"
+
+        def is_path_safe(path: str) -> bool:
+            path = os.path.abspath(path)
+            return path.startswith(safe_dir_local) or path.startswith(safe_dir_roaming)
+
+        if not all(map(is_path_safe, [target_exe_path, target_config_path, target_version_path])):
+            self.log_message(
+                translate("Error: Deletion path is outside the allowed directory."), "ERROR"
+            )
+            messagebox.showerror(
+                translate("Error"),
+                translate("Deletion outside user data directory is not allowed."),
+            )
+            return False
+        return True
+
+    def _confirm_deletion(self, exe: str, config: str, ver: str) -> bool:
+        """Asks the user for final confirmation before deleting files."""
+        if not any(map(os.path.exists, [exe, config, ver])):
+            ToastNotification(
+                title=translate("Delete Files"),
+                message=translate("Files not found."),
+                bootstyle=INFO,
+                duration=3000,
+            ).show_toast()
+            return False
+        
+        msg = (
+            f"{translate('Are you sure you want to delete these files? This cannot be undone.')}\n\n"
+            f"- {exe}\n"
+            f"- {config}\n"
+            f"- {ver}"
+        )
+        return messagebox.askyesno(translate("Confirm File Deletion"), msg)
+
+    def _perform_deletion(self, exe: str, config: str, ver: str) -> None:
+        """Performs the actual file removal."""
+        for file_path in [exe, config, ver]:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                self.log_message(f"Deleted: {_sanitize_for_logging(file_path)}", "INFO")
+
+    def _handle_deletion_error(self, e: Exception) -> None:
+        """Logs and shows error message on deletion failure."""
+        logger.error(f"Failed to delete bridge files: {e}", exc_info=True)
+        self.log_message(
+            f"{translate('Failed to delete files. Check logs.')}: {_sanitize_for_logging(e)}",
+            "ERROR",
+        )
+        messagebox.showerror(
+            translate("Error"),
+            f"{translate('Failed to delete files. Check logs.')}\n{e}",
+        )
+
+    def on_close(self) -> None:
+        """Cleanup function to stop the bridge on application close."""
+        self.stop_bridge()
+
+    def set_controls_state(self, active: bool) -> None:
+        """Enable or disable all controls in this tab."""
+        if not hasattr(self.view, "start_button"):
+            return
+
+        is_running = self._is_bridge_running()
+
+        try:
+            self.view.start_button.config(
+                state="disabled" if (is_running or not active) else "normal"
+            )
+            self.view.stop_button.config(
+                state="normal" if (is_running and active) else "disabled"
+            )
+            self._update_apply_button_state(is_running, active)
+            self._update_update_button_logic(active)
+
+            self.view.reset_button.config(
+                state="normal" if (active and not is_running) else "disabled"
+            )
+            self.view.delete_files_button.config(
+                state="normal" if (active and not is_running) else "disabled"
+            )
+
+            custom_path_state = "disabled" if (is_running or not active) else "normal"
+            self.view.exe_cb.config(state=custom_path_state)
+            self.view.config_cb.config(state=custom_path_state)
+            self.view.url_cb.config(state=custom_path_state)
+
+            self._update_custom_path_entries(is_running, active)
+
+        except tk.TclError:
+            pass
+
+    def _update_apply_button_state(self, is_running: bool, active: bool) -> None:
+        try:
+            new_command = self.command_preview_var.get().strip()
+            if is_running and active and new_command != self.running_command_str:
+                self.view.apply_restart_button.config(state="normal")
+            else:
+                self.view.apply_restart_button.config(state="disabled")
+        except tk.TclError:
+            self.view.apply_restart_button.config(state="disabled")
+
+    def _update_custom_path_entries(self, is_running: bool, active: bool) -> None:
+        if not is_running and active:
+            self.view.toggle_entry_state(
+                self.use_custom_exe_var,
+                [self.view.exe_entry, self.view.exe_browse],
+            )
+            self.view.toggle_entry_state(
+                self.use_custom_config_var,
+                [self.view.config_entry, self.view.config_browse],
+            )
+            custom_url_widgets = [
+                self.view.url_entry,
+                self.view.url_exe_path_label,
+                self.view.url_exe_path_entry,
+                self.view.url_config_path_label,
+                self.view.url_config_path_entry,
+            ]
+            self.view.toggle_entry_state(self.use_custom_url_var, custom_url_widgets)
+        else:
+            self._disable_all_custom_entries()
+
+    def _disable_all_custom_entries(self) -> None:
+        disabled_var = ttk.BooleanVar(value=False)
+        self.view.toggle_entry_state(
+            disabled_var, [self.view.exe_entry, self.view.exe_browse]
+        )
+        self.view.toggle_entry_state(
+            disabled_var, [self.view.config_entry, self.view.config_browse]
+        )
+        custom_url_widgets = [
+            self.view.url_entry,
+            self.view.url_exe_path_label,
+            self.view.url_exe_path_entry,
+            self.view.url_config_path_label,
+            self.view.url_config_path_entry,
+        ]
+        self.view.toggle_entry_state(disabled_var, custom_url_widgets)
+
+    def re_translate(self) -> None:
+        """Update all translatable strings in the UI."""
+        self.view.re_translate_widgets()
+        self._check_local_bridge_version()
+
+        if self.version_checker:
+            if "N/A" in self.latest_bridge_version_var.get() or "Error" in self.latest_bridge_version_var.get():
+                self.version_checker.check_version()
+            else:
+                current_version = self.latest_bridge_version_var.get().split(":")[-1].strip()
+                self.latest_bridge_version_var.set(
+                    f"{translate('Latest Version')}: {current_version}"
+                )
+
+        if "N/A" not in self.latest_bridge_date_var.get() and "Error" not in self.latest_bridge_date_var.get():
+            current_date = self.latest_bridge_date_var.get().split(":")[-1].strip()
+            if current_date:
+                self.latest_bridge_date_var.set(
+                    f"{translate('Updated')}: {current_date}"
+                )
+
+    def _is_bridge_running(self) -> bool:
+        """Checks if the bridge process is currently active."""
+        return bool(self.bridge_process and self.bridge_process.poll() is None)
+
+    def _check_external_conflicts(self, is_autostart: bool) -> bool:
+        """
+        Checks for external bridge processes and warns the user if any are found.
+        Returns True if a conflict exists and execution should stop.
+        """
+        self._check_for_external_process()
+        if self.external_process_pids:
+            pids_str = ", ".join(map(str, self.external_process_pids))
+            msg = f"External ks_bridge.exe found (PID: {pids_str}). Stop it to run the bridge here."
+            self.log_message(msg, "ERROR")
+            if not is_autostart:
+                messagebox.showerror(translate("Error"), translate(msg))
+            return True
+        return False
+
+    def _resolve_executable_and_config(self) -> Tuple[str, str]:
+        """
+        Determines the correct paths for the executable and config file,
+        handling custom path logic and fallbacks.
+        """
+        # 1. Try to build the command list first to respect settings logic
+        command_list = self.build_args_from_settings()
+        if not command_list:
+            raise Exception("Command list could not be built.")
+
+        exe_path = command_list[0]
+        config_path = ""
+
+        # 2. Extract config path from args or settings
+        try:
+            config_arg_index = command_list.index("-config")
+            config_path = command_list[config_arg_index + 1]
+        except (ValueError, IndexError):
+            if (
+                self.use_custom_config_var.get()
+                and self.custom_config_path_var.get()
+            ):
+                config_path = os.path.abspath(self.custom_config_path_var.get())
+            else:
+                config_path = os.path.join(self.bridge_dir, "config.yaml")
+        
+        return exe_path, config_path
+
+    def _validate_files(
+        self, exe_path: str, config_path: str, is_autostart: bool
+    ) -> bool:
+        """
+        Validates that the executable and config files exist.
+        Attempts to fallback to default paths if custom ones fail.
+        Returns True if valid files are found, False otherwise.
+        """
+        if not os.path.isfile(exe_path) or not os.path.exists(config_path):
+            self.log_message(
+                f"File not found at '{exe_path}' or '{config_path}'. Checking defaults...",
+                "ERROR",
+            )
+            # Fallback to default paths
+            exe_path = self.bridge_exe_path
+            config_path = self.config_yaml_path
+
+            if not os.path.isfile(exe_path) or not os.path.exists(config_path):
+                msg = (
+                    f"{translate('Error')}: {translate('File not found')}:\n"
+                    f"EXE: {_sanitize_for_logging(exe_path)}\n"
+                    f"Config: {_sanitize_for_logging(config_path)}\n"
+                    f"{translate('Please update the bridge first using the \"Update Bridge\" button.')}"
+                )
+                self.log_message(msg, "ERROR")
+                self._update_update_button_logic()
+                if not is_autostart:
+                    messagebox.showerror(translate("Error"), msg)
+                return False
+
+        # Update internal paths to the validated ones (important if fallback happened)
+        self.bridge_exe_path = exe_path
+        self.config_yaml_path = config_path
+        return True
+
+    def _is_blocked_shell(self, exe_path: str, is_autostart: bool) -> bool:
+        """Checks if the selected executable is a blocked system shell."""
+        exe_name = os.path.basename(exe_path).lower()
+        blocked_shells = [
+            "cmd.exe", "powershell.exe", "pwsh.exe", "bash.exe", "sh.exe"
+        ]
+        if exe_name in blocked_shells:
+            self.log_message("Error: Executable cannot be a system shell.", "ERROR")
+            if not is_autostart:
+                messagebox.showerror(
+                    translate("Invalid Input"),
+                    "Selected executable is a blocked system shell.",
+                )
+            return True
+        return False
+
+    def _validate_ip_args(self, command_list: List[str], is_autostart: bool) -> bool:
+        """Validates IP/Port arguments in the command list."""
+        ip_port_args = {"-kaspa", "-stratum", "-prom", "-hcp"}
+        ipv6_pattern = re.compile(r"^\[[0-9a-fA-F:]+\]:(\d+)$")
+
+        for i, arg in enumerate(command_list):
+            arg_key = arg.split("=")[0]
+            if arg_key in ip_port_args:
+                value = ""
+                if "=" in arg:
+                    value = arg.split("=", 1)[1]
+                elif i + 1 < len(command_list):
+                    value = command_list[i + 1]
+
+                if (
+                    value
+                    and not validate_ip_port(value)
+                    and not ipv6_pattern.match(value)
+                ):
+                    if not is_autostart:
+                        messagebox.showerror(
+                            translate("Invalid Input"),
+                            f"Invalid IP/Port format for {arg_key}: {value}",
+                        )
+                    return False
+        return True
+
+    def _launch_subprocess(self, command_list: List[str], working_dir: str) -> None:
+        """Launches the subprocess and sets up I/O redirection."""
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
+
+        self.bridge_process = subprocess.Popen(
+            command_list,
+            cwd=working_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            startupinfo=startupinfo,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            text=False,
+        )
+
+    def _assign_job_object(self) -> None:
+        """Assigns the process to a Windows Job Object if applicable."""
+        if (
+            sys.platform == "win32"
+            and CONFIG.get("job_object_handle")
+            and ctypes
+            and self.bridge_process
+        ):
+            job_handle = CONFIG.get("job_object_handle")
+            if job_handle:
+                try:
+                    pid = self.bridge_process.pid
+                    PROCESS_SET_QUOTA_AND_TERMINATE = 0x0101
+                    h_process = ctypes.windll.kernel32.OpenProcess(
+                        PROCESS_SET_QUOTA_AND_TERMINATE, False, pid
+                    )
+
+                    if h_process:
+                        if ctypes.windll.kernel32.AssignProcessToJobObject(
+                            job_handle, h_process
+                        ):
+                            logger.info(f"Assigned ks_bridge (PID: {pid}) to Job Object.")
+                        else:
+                            err = ctypes.windll.kernel32.GetLastError()
+                            logger.error(f"Failed assign ks_bridge to Job Object. Error: {err}")
+                        ctypes.windll.kernel32.CloseHandle(h_process)
+                    else:
+                        err = ctypes.windll.kernel32.GetLastError()
+                        logger.error(f"Failed open ks_bridge process. Error: {err}")
+                except Exception as e:
+                    logger.error(f"Job Object assignment failed: {e}", exc_info=True)
+
+    def start_bridge(self, is_autostart: bool = False) -> None:
+        """
+        Start the kaspa-stratum-bridge subprocess.
+        Refactored to use helper methods for clarity and reduced complexity.
+        """
+        if self._is_bridge_running():
+            self.log_message(f"{translate('Bridge is already running.')}", "WARN")
+            return
+
+        self._stop_requested = False
+
+        if self._check_external_conflicts(is_autostart):
+            return
+
+        try:
+            exe_path, config_path = self._resolve_executable_and_config()
+        except Exception as e:
+            self.log_message(f"Error parsing command/paths: {e}", "ERROR")
+            if not is_autostart:
+                messagebox.showerror(translate("Invalid Input"), f"Error: {e}")
+            return
+
+        if self._is_blocked_shell(exe_path, is_autostart):
+            return
+
+        if not self._validate_files(exe_path, config_path, is_autostart):
+            return
+
+        # Re-build command list with validated paths (implicitly handled by instance vars update)
+        command_list = self.build_args_from_settings()
+        # Override the 0th element to ensure it matches the validated exe path
+        if command_list:
+            command_list[0] = self.bridge_exe_path
+        
+        if not self._validate_ip_args(command_list, is_autostart):
+            return
+
+        command_str = " ".join(command_list)
+        working_dir = os.path.dirname(self.config_yaml_path)
+
+        self.log_message(f"--- {translate('Starting Bridge')} ---", "INFO")
+        self.log_message(f"{translate('Working Directory')}:\n{_sanitize_for_logging(working_dir)}", "DEBUG")
+        self.log_message(f"{translate('Command')}:\n{command_str}", "DEBUG")
+        self.log_message("...", "INFO")
+
+        try:
+            self._launch_subprocess(command_list, working_dir)
+            self.running_command_str = command_str
+            self._assign_job_object()
 
             # --- PRIORITY BOOST FOR MINING PERFORMANCE ---
             # Raise priority to ABOVE_NORMAL to reduce block propagation latency

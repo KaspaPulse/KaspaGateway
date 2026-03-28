@@ -6,6 +6,7 @@ balance display, and the main fetch/cancel buttons.
 """
 
 from __future__ import annotations
+<<<<<<< HEAD
 
 import logging
 import tkinter as tk
@@ -18,6 +19,21 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import DISABLED, LEFT, NORMAL, X, Y
 from ttkbootstrap.tooltip import ToolTip
 
+=======
+
+import logging
+import tkinter as tk
+import webbrowser
+from tkinter import messagebox
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
+
+import pandas as pd
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
+from ttkbootstrap.toast import ToastNotification
+from ttkbootstrap.tooltip import ToolTip
+
+>>>>>>> dev-latest
 from src.config.config import CONFIG
 from src.utils.i18n import translate
 from src.utils.validation import (
@@ -39,9 +55,16 @@ class Input(ttk.Labelframe):
     The main input composite widget for loading addresses and initiating fetches.
     """
 
+<<<<<<< HEAD
     main_window: MainWindow
     transaction_manager: TransactionManager
     address_manager: AddressManager
+=======
+    # --- Class Attribute Type Declarations ---
+    main_window: "MainWindow"
+    transaction_manager: "TransactionManager"
+    address_manager: "AddressManager"
+>>>>>>> dev-latest
     placeholder_active: bool
 
     address_label: ttk.Label
@@ -61,17 +84,29 @@ class Input(ttk.Labelframe):
     def __init__(
         self,
         parent: ttk.Frame,
+<<<<<<< HEAD
         main_window: MainWindow,
         transaction_manager: TransactionManager,
         address_manager: AddressManager,
+=======
+        main_window: "MainWindow",
+        transaction_manager: "TransactionManager",
+        address_manager: "AddressManager",
+>>>>>>> dev-latest
     ) -> None:
         """
         Initializes the Input widget.
         """
         super().__init__(parent, text=f" {translate('Load Address')} ", padding=10)
+<<<<<<< HEAD
         self.main_window = main_window
         self.transaction_manager = transaction_manager
         self.address_manager = address_manager
+=======
+        self.main_window: "MainWindow" = main_window
+        self.transaction_manager: "TransactionManager" = transaction_manager
+        self.address_manager: "AddressManager" = address_manager
+>>>>>>> dev-latest
 
         self.placeholder_active = False
 
@@ -106,7 +141,10 @@ class Input(ttk.Labelframe):
             kas_balance_frame, text=f"{translate('Balance')}:"
         )
         self.balance_label_title.pack(side=LEFT, padx=(0, 5))
+<<<<<<< HEAD
 
+=======
+>>>>>>> dev-latest
         self.balance_label_value = ttk.Label(
             kas_balance_frame, text="N/A", font="-weight bold", bootstyle="info"
         )
@@ -115,7 +153,10 @@ class Input(ttk.Labelframe):
         # Row 2: Address Name and Fiat Value
         fiat_balance_frame = ttk.Frame(balance_container)
         fiat_balance_frame.pack(anchor="e")
+<<<<<<< HEAD
 
+=======
+>>>>>>> dev-latest
         self.balance_label_name = ttk.Label(
             fiat_balance_frame,
             text="",
@@ -123,7 +164,10 @@ class Input(ttk.Labelframe):
             bootstyle="success",
         )
         self.balance_label_name.pack(side=LEFT, padx=(0, 5))
+<<<<<<< HEAD
 
+=======
+>>>>>>> dev-latest
         self.balance_label_fiat_value = ttk.Label(
             fiat_balance_frame, text="", font="-size 9", bootstyle="secondary"
         )
@@ -132,7 +176,10 @@ class Input(ttk.Labelframe):
         # --- Action Buttons ---
         button_frame = ttk.Frame(container)
         button_frame.grid(row=0, column=3, padx=5, pady=5)
+<<<<<<< HEAD
 
+=======
+>>>>>>> dev-latest
         self.fetch_button = ttk.Button(
             button_frame,
             text=translate("Fetch"),
@@ -140,7 +187,10 @@ class Input(ttk.Labelframe):
             bootstyle="primary",
         )
         self.fetch_button.pack(side=LEFT, fill=Y, expand=True, padx=(0, 2))
+<<<<<<< HEAD
 
+=======
+>>>>>>> dev-latest
         self.force_fetch_button = ttk.Button(
             button_frame,
             text=translate("Force Fetch"),
@@ -150,9 +200,13 @@ class Input(ttk.Labelframe):
         self.force_fetch_button.pack(side=LEFT, fill=Y, expand=True, padx=(0, 5))
 
         self.explorer_btn = ttk.Button(
+<<<<<<< HEAD
             button_frame,
             text=translate("Explorer"),
             command=self._open_in_explorer,
+=======
+            button_frame, text=translate("Explorer"), command=self._open_in_explorer
+>>>>>>> dev-latest
         )
         self.explorer_btn.pack(side=LEFT, fill=Y, expand=True)
 
@@ -176,11 +230,19 @@ class Input(ttk.Labelframe):
 
     def _on_address_entry_change(self, event: Optional[tk.Event] = None) -> None:
         """Validates the address entry on key release."""
+<<<<<<< HEAD
         addr: str = self.address_combo.get().strip()
         if hasattr(self.main_window, "_update_ui_for_address_validity"):
             self.main_window._update_ui_for_address_validity(
                 validate_kaspa_address(addr)
             )
+=======
+        address: str = self.address_combo.get().strip()
+        is_valid: bool = validate_kaspa_address(address)
+
+        if hasattr(self.main_window, "_update_ui_for_address_validity"):
+            self.main_window._update_ui_for_address_validity(is_valid)
+>>>>>>> dev-latest
 
     def _open_in_explorer(self) -> None:
         """Opens the currently entered address in the Kaspa explorer."""
@@ -191,11 +253,24 @@ class Input(ttk.Labelframe):
             )
             url_template = active_profile.get("explorer", {}).get("address", "")
 
+<<<<<<< HEAD
             if url_template:
                 url = url_template.format(kaspaAddress=addr)
                 webbrowser.open(url, new=2)
             else:
                 logger.warning("Explorer URL template not found in config.")
+=======
+        active_profile = CONFIG["api"]["profiles"].get(
+            CONFIG["api"]["active_profile"], {}
+        )
+        url_template = active_profile.get("explorer", {}).get("address", "")
+
+        if url_template:
+            url = url_template.format(kaspaAddress=address)
+            webbrowser.open(url, new=2)
+        else:
+            logger.warning("Explorer URL template not found in config.")
+>>>>>>> dev-latest
 
     def _on_dropdown_select(self, event: Optional[tk.Event] = None) -> None:
         """
@@ -207,6 +282,7 @@ class Input(ttk.Labelframe):
         self.address_combo.set(address)
         self._on_address_entry_change()
 
+<<<<<<< HEAD
         if (
             hasattr(self.main_window, "current_address")
             and self.main_window.current_address
@@ -214,6 +290,9 @@ class Input(ttk.Labelframe):
             if address.lower() == self.main_window.current_address.lower():
                 return
 
+=======
+        # --- FIX 1: Clear results and show placeholder instantly if address changes ---
+>>>>>>> dev-latest
         if (
             hasattr(self.main_window, "explorer_tab")
             and address != self.main_window.current_address
@@ -237,7 +316,14 @@ class Input(ttk.Labelframe):
         ):
             return
 
+<<<<<<< HEAD
         if hasattr(self.main_window, "explorer_tab"):
+=======
+        # --- FIX 2: Ensure results area is cleared and shows "Fetching" status ---
+        if hasattr(self.main_window, "explorer_tab"):
+            # This prepares the UI: clears old data and shows "Fetching" placeholder,
+            # ensuring the user sees the operation has started.
+>>>>>>> dev-latest
             self.main_window.explorer_tab.results_component.prepare_for_force_fetch()
 
         # Auto-save the address if it's new
@@ -250,6 +336,10 @@ class Input(ttk.Labelframe):
                 logger.info(f"New address auto-saved: {address}")
                 self.refresh_address_dropdown(new_address_to_select=address)
 
+<<<<<<< HEAD
+=======
+                # Safely refresh the settings tab if it has been initialized
+>>>>>>> dev-latest
                 if (
                     hasattr(self.main_window, "settings_tab")
                     and self.main_window.settings_tab.address_tab_initialized

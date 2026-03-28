@@ -26,8 +26,13 @@ PrivilegesRequired=lowest
 
 ; --- Output Installer File ---
 OutputDir=dist
+<<<<<<< HEAD
 ; *** FIXED: Using static name for local build instead of undeclared variable ***
 OutputBaseFilename=KaspaGateway_v1.0.0_Setup
+=======
+; *** MODIFICATION: Use the variable from the deploy.yml file ***
+OutputBaseFilename={#SetupFilename}
+>>>>>>> dev-latest
 SetupIconFile=assets\kaspa-white.ico
 ; *** FIX: Added this line to show the icon in 'Add or Remove Programs' ***
 UninstallDisplayIcon={app}\KaspaGateway.exe
@@ -69,7 +74,15 @@ Name: "{group}\KaspaGateway"; Filename: "{app}\KaspaGateway.exe"; Parameters: "-
 Name: "{userdesktop}\KaspaGateway"; Filename: "{app}\KaspaGateway.exe"; Parameters: "--user-data-path ""{userappdata}\KaspaGateway"""; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Registry]
+<<<<<<< HEAD
 ; --- Add Autostart registry key ---
+=======
+; --- Add Autostart registry key (if user enables it in the app) ---
+;
+; This key is managed by the application's settings, but we ensure it's
+; removed on uninstall.
+; The app itself will create/delete this key based on user choice.
+>>>>>>> dev-latest
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "KaspaGateway"; ValueData: """{app}\KaspaGateway.exe"" --user-data-path ""{userappdata}\KaspaGateway"""; Flags: uninsdeletevalue createvalueifdoesntexist
 
 [Run]

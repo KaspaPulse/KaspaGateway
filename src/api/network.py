@@ -14,8 +14,12 @@ import requests
 from src.config.config import APP_NAME, APP_VERSION, CONFIG, get_active_api_config
 from src.utils.errors import APIError
 from src.utils.formatting import mask_address
+<<<<<<< HEAD
 # FIX: Removed sanitize_data_for_logging to prevent circular import
 from src.utils.validation import _sanitize_for_logging
+=======
+from src.utils.validation import _sanitize_for_logging, sanitize_data_for_logging
+>>>>>>> dev-latest
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +110,11 @@ def fetch_address_balance(address: str) -> Optional[float]:
     api_config: Dict[str, Any] = get_active_api_config()
     base: str = api_config["base_url"]
     endpoint: str = api_config["endpoints"]["balance"]
+<<<<<<< HEAD
     url: str = f"{base}{endpoint.format(kaspaAddress=address)}"
+=======
+    url: str = f"{base}{endpoint}".format(kaspaAddress=address)
+>>>>>>> dev-latest
 
     data: Optional[Any] = _make_api_request(url)
     try:
@@ -116,18 +124,29 @@ def fetch_address_balance(address: str) -> Optional[float]:
             and data["balance"] is not None
             and isinstance(data["balance"], (int, float, str))
         ):
+<<<<<<< HEAD
             # Convert sompi to KAS
             return float(data["balance"]) / 1e8
 
         # FIX: Replaced problematic function with safe str()
         logger.warning(
             f"Invalid or missing balance data structure for address {mask_address(address)}: {str(data)}"
+=======
+            return float(data["balance"]) / 1e8  # Convert sompi to KAS
+
+        logger.warning(
+            f"Invalid or missing balance data structure for address {mask_address(address)}: {sanitize_data_for_logging(data)}"
+>>>>>>> dev-latest
         )
         return None
     except (ValueError, TypeError, KeyError) as e:
         # FIX: Replaced problematic function with safe str()
         logger.warning(
+<<<<<<< HEAD
             f"Invalid or missing balance data received for address {mask_address(address)}: {str(data)} - Error: {_sanitize_for_logging(e)}"
+=======
+            f"Invalid or missing balance data received for address {mask_address(address)}: {sanitize_data_for_logging(data)} - Error: {_sanitize_for_logging(e)}"
+>>>>>>> dev-latest
         )
     return None
 
@@ -146,9 +165,13 @@ def fetch_top_addresses() -> Optional[List[Any]]:
     api_config: Dict[str, Any] = get_active_api_config()
     url: str = f"{api_config['base_url']}{api_config['endpoints']['top_addresses']}"
     data: Optional[Any] = _make_api_request(url)
+<<<<<<< HEAD
     # The API might return a list of lists/objects or a single dict containing the ranking list.
     # We return the raw data and let the consumer handle the structure (TopAddressesTab)
     return data if isinstance(data, (list, dict)) or data is None else None
+=======
+    return data if isinstance(data, list) or data is None else None
+>>>>>>> dev-latest
 
 
 def fetch_network_stats() -> Dict[str, Optional[float]]:
@@ -165,8 +188,14 @@ def fetch_network_stats() -> Dict[str, Optional[float]]:
             and "hashrate" in hashrate_data
             and hashrate_data["hashrate"] is not None
         ):
+<<<<<<< HEAD
             # Convert H/s to PH/s
             stats["hashrate"] = float(hashrate_data["hashrate"]) / 1000.0
+=======
+            stats["hashrate"] = (
+                float(hashrate_data["hashrate"]) / 1000.0
+            )  # Convert to PH/s
+>>>>>>> dev-latest
     except (ValueError, TypeError, APIError) as e:
         logger.error(
             f"Failed to parse or fetch hashrate data: {_sanitize_for_logging(e)}",
@@ -258,4 +287,8 @@ def fetch_latest_release_info(api_url: str) -> Optional[Dict[str, Any]]:
         return data
     else:
         logger.warning(f"Unexpected data format received from GitHub API: {type(data)}")
+<<<<<<< HEAD
         return None
+=======
+        return None
+>>>>>>> dev-latest

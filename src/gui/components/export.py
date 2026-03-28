@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -11,6 +12,12 @@ from typing import Any, Callable
 
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import DISABLED, LEFT, NORMAL
+=======
+from typing import Callable
+
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
+>>>>>>> dev-latest
 
 from src.utils.i18n import translate
 
@@ -36,14 +43,20 @@ class ExportComponent(ttk.Frame):
         super().__init__(parent, padding=(5, 5))
         self.export_callback = export_callback
 
+<<<<<<< HEAD
         # Configure grid layout
+=======
+>>>>>>> dev-latest
         self.grid_columnconfigure(4, weight=1)
 
         # Label
         self.label = ttk.Label(self, text=translate("Export Results:"))
         self.label.pack(side=LEFT, padx=(0, 10))
 
+<<<<<<< HEAD
         # CSV Export Button
+=======
+>>>>>>> dev-latest
         self.csv_button = ttk.Button(
             self,
             text=translate("Save as CSV"),
@@ -52,7 +65,10 @@ class ExportComponent(ttk.Frame):
         )
         self.csv_button.pack(side=LEFT, padx=5)
 
+<<<<<<< HEAD
         # HTML Export Button
+=======
+>>>>>>> dev-latest
         self.html_button = ttk.Button(
             self,
             text=translate("Save as HTML"),
@@ -61,7 +77,10 @@ class ExportComponent(ttk.Frame):
         )
         self.html_button.pack(side=LEFT, padx=5)
 
+<<<<<<< HEAD
         # PDF Export Button
+=======
+>>>>>>> dev-latest
         self.pdf_button = ttk.Button(
             self,
             text=translate("Save as PDF"),

@@ -11,17 +11,106 @@ import json
 import logging
 import os
 import sys
+<<<<<<< HEAD
 from typing import Any, Dict, List, MutableMapping, Optional
+=======
+from functools import reduce
+from operator import getitem
+from typing import Any, Dict, List, MutableMapping, Optional, Tuple
+>>>>>>> dev-latest
 
 import keyring
 
 logger = logging.getLogger(__name__)
 
+<<<<<<< HEAD
 # Application Constants
 APP_VERSION: str = "1.0.0"
 APP_NAME: str = "KaspaGateway"
 
 # Global Configuration State
+=======
+APP_VERSION: str = "1.0.0"
+APP_NAME: str = "KaspaGateway"
+
+
+def _get_keyring_service_name() -> str:
+    """Generates a unique service name for keyring based on the app and user."""
+    try:
+        username: str = getpass.getuser()
+    except Exception:
+        username = "default_user"
+    return f"{APP_NAME}-{username}"
+
+
+def get_project_root() -> str:
+    """Gets the root directory of the project, handling both source and bundled (PyInstaller) execution."""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return sys._MEIPASS
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+
+def get_assets_path(relative_path: str) -> str:
+    """Gets the full path to a file in the 'assets' directory."""
+    return os.path.join(get_project_root(), "assets", relative_path)
+
+
+def get_user_data_root(custom_path: Optional[str] = None) -> str:
+    """
+    Determines and creates the root directory for user data (config, logs, db).
+
+    Contains security checks to ensure that a 'custom_path' is safe
+    and does not contain characters that could lead to command injection.
+    """
+    default_root: str = os.path.join(
+        os.getenv("LOCALAPPDATA", os.getenv("APPDATA", "")), APP_NAME
+    )
+    path: str = default_root
+    use_default: bool = False
+
+    if custom_path:
+        # Security Check: Block characters that could break out of quoted paths (e.g., in Windows Registry).
+        if '"' in custom_path:
+            logger.error(
+                f'Invalid custom_path (contains forbidden characters: "). '
+                f"Falling back to default."
+            )
+            use_default = True
+        else:
+            try:
+                safe_root_abs: str = os.path.abspath(default_root)
+                user_path_abs: str = os.path.abspath(custom_path)
+
+                if user_path_abs.startswith(safe_root_abs):
+                    path = user_path_abs
+                    logger.info(f"Using custom user data path: {path}")
+                else:
+                    logger.error(
+                        f"Invalid custom_path (not a subdirectory of {safe_root_abs}). "
+                        f"Falling back to default."
+                    )
+                    use_default = True
+            except Exception as e:
+                logger.error(
+                    f"Error processing custom_path '{custom_path}': {e}. "
+                    f"Falling back to default."
+                )
+                use_default = True
+
+        if use_default:
+            path = os.path.abspath(default_root)
+
+    try:
+        os.makedirs(path, exist_ok=True)
+    except OSError as e:
+        logger.critical(f"Could not create user data directory at {path}: {e}")
+        path = os.path.abspath(os.path.join(get_project_root(), "user_data"))
+        os.makedirs(path, exist_ok=True)
+        logger.warning(f"Falling back to local user data directory: {path}")
+    return path
+
+
+>>>>>>> dev-latest
 USER_DATA_ROOT: str = ""
 CONFIG_FILE: str = ""
 CONFIG: Dict[str, Any] = {}
@@ -30,12 +119,47 @@ DEFAULT_CONFIG: Dict[str, Any] = {}
 # --- Constants & Defaults ---
 
 SUPPORTED_CURRENCIES: List[str] = [
+<<<<<<< HEAD
     "usd", "sar", "eur", "gbp", "chf", "aud", "cad", "jpy", "krw", "rub",
     "cny", "try", "inr", "idr", "hkd", "sgd", "brl",
+=======
+    "usd",
+    "sar",
+    "eur",
+    "gbp",
+    "chf",
+    "aud",
+    "cad",
+    "jpy",
+    "krw",
+    "rub",
+    "cny",
+    "try",
+    "inr",
+    "idr",
+    "hkd",
+    "sgd",
+    "brl",
+>>>>>>> dev-latest
 ]
 
 SUPPORTED_LANGUAGES: List[str] = [
+<<<<<<< HEAD
     "en", "ar", "ru", "tr", "de", "es", "fr", "hi", "ja", "ko", "zh-CN", "id",
+=======
+    "en",
+    "ar",
+    "ru",
+    "tr",
+    "de",
+    "es",
+    "fr",
+    "hi",
+    "ja",
+    "ko",
+    "zh-CN",
+    "id",
+>>>>>>> dev-latest
 ]
 
 SUPPORTED_TABS: List[str] = [
@@ -48,19 +172,59 @@ SUPPORTED_TABS: List[str] = [
 ]
 
 CURRENCY_SYMBOLS: Dict[str, str] = {
+<<<<<<< HEAD
     "usd": "$", "sar": "SAR", "eur": "€", "gbp": "£", "chf": "CHF",
     "aud": "A$", "cad": "C$", "jpy": "¥", "krw": "₩", "rub": "₽",
     "cny": "¥", "try": "₺", "inr": "₹", "idr": "Rp", "hkd": "HK$",
     "sgd": "S$", "brl": "R$",
+=======
+    "usd": "$",
+    "sar": "SAR",
+    "eur": "€",
+    "gbp": "£",
+    "chf": "CHF",
+    "aud": "A$",
+    "cad": "C$",
+    "jpy": "¥",
+    "krw": "₩",
+    "rub": "₽",
+    "cny": "¥",
+    "try": "₺",
+    "inr": "₹",
+    "idr": "Rp",
+    "hkd": "HK$",
+    "sgd": "S$",
+    "brl": "R$",
+>>>>>>> dev-latest
 }
 
 CURRENCY_TRANSLATION_KEYS: Dict[str, str] = {
+<<<<<<< HEAD
     "usd": "currency_usd", "sar": "currency_sar", "eur": "currency_eur",
     "gbp": "currency_gbp", "chf": "currency_chf", "aud": "currency_aud",
     "cad": "currency_cad", "jpy": "currency_jpy", "krw": "currency_krw",
     "rub": "currency_rub", "cny": "currency_cny", "try": "currency_try",
     "inr": "currency_inr", "idr": "currency_idr", "hkd": "currency_hkd",
     "sgd": "currency_sgd", "brl": "currency_brl",
+=======
+    "usd": "currency_usd",
+    "sar": "currency_sar",
+    "eur": "currency_eur",
+    "gbp": "currency_gbp",
+    "chf": "currency_chf",
+    "aud": "currency_aud",
+    "cad": "currency_cad",
+    "jpy": "currency_jpy",
+    "krw": "currency_krw",
+    "rub": "currency_rub",
+    "cny": "currency_cny",
+    "try": "currency_try",
+    "inr": "currency_inr",
+    "idr": "currency_idr",
+    "hkd": "currency_hkd",
+    "sgd": "currency_sgd",
+    "brl": "currency_brl",
+>>>>>>> dev-latest
 }
 
 DEFAULT_API_PROFILE: Dict[str, Any] = {
@@ -148,13 +312,23 @@ def get_user_data_root(custom_path: Optional[str] = None) -> str:
 def _encrypt(data: str) -> str:
     if not data:
         return ""
+<<<<<<< HEAD
+=======
+
+>>>>>>> dev-latest
     service: str = _get_keyring_service_name()
     username: str = "api_key"
     try:
         keyring.set_password(service, username, data)
         return f"keyring_managed:{service}:{username}"
     except Exception as e:
+<<<<<<< HEAD
         logger.error(f"Keyring encryption failed: {e}")
+=======
+        logger.error(
+            f"Keyring encryption failed: {e}. API key will be stored unencrypted as a fallback."
+        )
+>>>>>>> dev-latest
         return data
 
 def _decrypt(data: str) -> str:
@@ -166,6 +340,7 @@ def _decrypt(data: str) -> str:
             key: Optional[str] = keyring.get_password(service, username)
             return key if key else ""
         except Exception as e:
+<<<<<<< HEAD
             logger.error(f"Keyring decryption failed: {e}")
             return ""
     try:
@@ -175,6 +350,29 @@ def _decrypt(data: str) -> str:
         return data
 
 def _recursive_encrypt(d: Any) -> Any:
+=======
+            logger.error(
+                f"Keyring decryption failed: {e}. Key might be lost or inaccessible."
+            )
+            return ""
+
+    try:
+        base64.b64decode(data.encode("utf-8"))
+        logger.warning(
+            "Legacy encrypted (win32crypt) API key detected. This format is no longer supported. "
+            "Please re-enter your API key to migrate it to the new secure storage."
+        )
+        return ""
+    except Exception:
+        logger.warning(
+            "Unencrypted API key detected in config file. Attempting to migrate to secure OS keyring..."
+        )
+        return data
+
+
+def _recursive_encrypt(d: Any) -> Any:
+    """Recursively finds and encrypts 'api_key' fields."""
+>>>>>>> dev-latest
     if isinstance(d, dict):
         new_dict: Dict[str, Any] = {}
         for k, v in d.items():
@@ -187,7 +385,13 @@ def _recursive_encrypt(d: Any) -> Any:
         return [_recursive_encrypt(item) for item in d]
     return d
 
+<<<<<<< HEAD
 def _recursive_decrypt(d: Any) -> Any:
+=======
+
+def _recursive_decrypt(d: Any) -> Any:
+    """Recursively finds and decrypts 'api_key' fields."""
+>>>>>>> dev-latest
     if isinstance(d, dict):
         new_dict: Dict[str, Any] = {}
         for k, v in d.items():
@@ -228,7 +432,11 @@ def _initialize_defaults(user_data_root: str) -> None:
         "performance": {
             "timeout": 30,
             "retry_attempts": 5,
+<<<<<<< HEAD
             "backoff_factor": 4.0,
+=======
+            "backoff_factor": 0.5,
+>>>>>>> dev-latest
             "max_workers": 10,
             "max_pages": 10000,
             "page_delay": 0.05,
@@ -256,7 +464,15 @@ def _initialize_defaults(user_data_root: str) -> None:
         "kaspa_bridge": {"enable_bridge_2": False},
     }
 
+<<<<<<< HEAD
 def _recursive_update(d: MutableMapping[str, Any], u: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
+=======
+
+def _recursive_update(
+    d: MutableMapping[str, Any], u: MutableMapping[str, Any]
+) -> MutableMapping[str, Any]:
+    """Recursively updates a dictionary."""
+>>>>>>> dev-latest
     for k, v in u.items():
         if isinstance(v, MutableMapping):
             d[k] = _recursive_update(d.get(k, {}), v)
@@ -265,6 +481,7 @@ def _recursive_update(d: MutableMapping[str, Any], u: MutableMapping[str, Any]) 
     return d
 
 def _migrate_config(user_config: Dict[str, Any]) -> Dict[str, Any]:
+<<<<<<< HEAD
     if "api" in user_config and "profiles" not in user_config.get("api", {}):
         logger.warning("Migrating old API config.")
         old_api_config = user_config.pop("api", {})
@@ -278,6 +495,34 @@ def _migrate_config(user_config: Dict[str, Any]) -> Dict[str, Any]:
             "profiles": {"Default": migrated_api},
         }
     return _recursive_decrypt(user_config)
+=======
+    """Migrates old config structures to new ones."""
+    if "api" in user_config and "profiles" not in user_config.get("api", {}):
+        logger.warning(
+            "Old API config format detected. Migrating to new profile-based structure."
+        )
+        old_api_config: Dict[str, Any] = user_config.pop("api", {})
+        migrated_api_profile: Dict[str, Any] = json.loads(
+            json.dumps(DEFAULT_API_PROFILE)
+        )
+        migrated_api_profile["base_url"] = old_api_config.get(
+            "base_url", DEFAULT_API_PROFILE["base_url"]
+        )
+
+        for section_key in ["endpoints", "explorer", "external"]:
+            if section_key in old_api_config and isinstance(
+                old_api_config[section_key], dict
+            ):
+                migrated_api_profile[section_key].update(old_api_config[section_key])
+        user_config["api"] = {
+            "active_profile": "Default",
+            "profiles": {"Default": migrated_api_profile},
+        }
+
+    user_config = _recursive_decrypt(user_config)
+    return user_config
+
+>>>>>>> dev-latest
 
 def _save_config_file(config: Dict[str, Any]) -> None:
     """
@@ -286,12 +531,16 @@ def _save_config_file(config: Dict[str, Any]) -> None:
     to prevent git hashes or dev tags from breaking version checks later.
     """
     try:
-        encrypted_config = _recursive_encrypt(config)
+        encrypted_config: Dict[str, Any] = _recursive_encrypt(config)
         os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+<<<<<<< HEAD
         
         # Force clean version on disk
         encrypted_config["version"] = APP_VERSION
         
+=======
+        encrypted_config["version"] = APP_VERSION
+>>>>>>> dev-latest
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(encrypted_config, f, indent=4, sort_keys=True)
         logger.info(f"Configuration saved to {CONFIG_FILE}")
@@ -306,27 +555,70 @@ def load_config() -> Dict[str, Any]:
 
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+<<<<<<< HEAD
             user_config = json.load(f)
+=======
+            user_config: Dict[str, Any] = json.load(f)
+>>>>>>> dev-latest
 
         user_config = _migrate_config(user_config)
-        final_config = json.loads(json.dumps(DEFAULT_CONFIG))
+        final_config: Dict[str, Any] = json.loads(json.dumps(DEFAULT_CONFIG))
         final_config = _recursive_update(final_config, user_config)
 
         if final_config.get("version") != APP_VERSION:
+<<<<<<< HEAD
             logger.warning(f"Version mismatch. Upgrading config to {APP_VERSION}...")
+=======
+            logger.warning(
+                f"Configuration version mismatch. Upgrading from '{final_config.get('version')}' to '{APP_VERSION}'."
+            )
+
+            user_profiles: Dict[str, Any] = final_config.get("api", {}).get(
+                "profiles", {}
+            )
+            default_api_config: Dict[str, Any] = json.loads(
+                json.dumps(DEFAULT_CONFIG["api"])
+            )
+            final_config["api"] = default_api_config
+            final_config["api"]["profiles"].update(user_profiles)
+
+            if (
+                final_config["api"]["active_profile"]
+                not in final_config["api"]["profiles"]
+            ):
+                final_config["api"]["active_profile"] = "Default"
+
+>>>>>>> dev-latest
             final_config["version"] = APP_VERSION
             _save_config_file(final_config)
 
         return final_config
 
     except (json.JSONDecodeError, OSError) as e:
+<<<<<<< HEAD
         logger.error(f"Error reading config file: {e}. Reverting to defaults.")
+=======
+        logger.error(
+            f"Error reading config file '{CONFIG_FILE}': {e}. Reverting to defaults."
+        )
+>>>>>>> dev-latest
         _save_config_file(DEFAULT_CONFIG)
         return DEFAULT_CONFIG.copy()
 
 def get_active_api_config() -> Dict[str, Any]:
+<<<<<<< HEAD
     active_profile = CONFIG.get("api", {}).get("active_profile", "Default")
     return CONFIG.get("api", {}).get("profiles", {}).get(active_profile, DEFAULT_API_PROFILE)
+=======
+    """Gets the currently active API profile configuration."""
+    active_profile_name: str = CONFIG.get("api", {}).get("active_profile", "Default")
+    return (
+        CONFIG.get("api", {})
+        .get("profiles", {})
+        .get(active_profile_name, DEFAULT_API_PROFILE)
+    )
+
+>>>>>>> dev-latest
 
 def initialize_config(custom_path: Optional[str] = None) -> None:
     global USER_DATA_ROOT, CONFIG_FILE, CONFIG

@@ -14,11 +14,18 @@ It critically handles stale locks left behind by crashed processes by:
    "database is locked" IOException on the next startup.
 """
 
+<<<<<<< HEAD
 from __future__ import annotations
 
 import atexit
 import logging
 import os
+=======
+import atexit
+import logging
+import os
+import time
+>>>>>>> dev-latest
 from typing import Any, Dict, List, Optional
 
 try:
@@ -78,12 +85,19 @@ def _cleanup_stale_lock(db_name: str, lock_path: str) -> bool:
 
     try:
         with open(lock_path, "r", encoding="utf-8") as f:
+<<<<<<< HEAD
             pid_str: str = f.read().strip()
 
         if not pid_str:
             raise ValueError("Lock file is empty.")
         
         pid: int = int(pid_str)
+=======
+            pid_str = f.read().strip()
+            if not pid_str:
+                raise ValueError("Lock file is empty.")
+            pid = int(pid_str)
+>>>>>>> dev-latest
 
         if psutil.pid_exists(pid):
             # Process is still running, lock is valid.
@@ -106,13 +120,22 @@ def _cleanup_stale_lock(db_name: str, lock_path: str) -> bool:
         # Clean up the stale .lock file
         os.remove(lock_path)
 
+<<<<<<< HEAD
         # CRITICAL: Clean up the associated .wal file (DuckDB recovery mechanism)
         wal_path: str = _get_wal_path(db_name)
+=======
+        # CRITICAL: Clean up the associated .wal file
+        wal_path = _get_wal_path(db_name)
+>>>>>>> dev-latest
         if os.path.exists(wal_path):
             os.remove(wal_path)
             logger.info(f"Removed stale WAL file: {wal_path}")
 
+<<<<<<< HEAD
         return True
+=======
+        return True  # Stale lock was successfully cleaned up
+>>>>>>> dev-latest
 
     except OSError as e:
         logger.error(f"Failed to clean up stale lock/WAL for {db_name}: {e}")
@@ -124,7 +147,12 @@ def acquire_lock(db_name: str) -> bool:
     Attempts to acquire an exclusive, process-aware lock for a database.
     """
     if not _lock_dir:
+<<<<<<< HEAD
         _initialize_lock_dir(CONFIG)
+=======
+        _lock_dir = CONFIG.get("paths", {}).get("database", ".")
+        os.makedirs(_lock_dir, exist_ok=True)
+>>>>>>> dev-latest
 
     lock_path: str = _get_lock_path(db_name)
 
@@ -135,11 +163,16 @@ def acquire_lock(db_name: str) -> bool:
                 return False
 
         # At this point, no valid lock file exists
+<<<<<<< HEAD
         # Attempt to create the lock file exclusively (O_EXCL ensures atomicity)
         # We need the file descriptor (fd) to ensure the file remains open/locked
         fd: int = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
 
         # Write current PID to the lock file
+=======
+        # Attempt to create the lock file exclusively
+        fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+>>>>>>> dev-latest
         with os.fdopen(fd, "w") as f:
             f.write(str(os.getpid()))
 
@@ -202,9 +235,17 @@ def acquire_all_locks(config: Dict[str, Any]) -> bool:
     """
     Attempts to acquire locks for all databases defined in the config.
     """
+<<<<<<< HEAD
     _initialize_lock_dir(config)
 
     db_filenames: Dict[str, str] = config.get("db_filenames", {})
+=======
+    global _lock_dir
+    _lock_dir = config.get("paths", {}).get("database", ".")
+    os.makedirs(_lock_dir, exist_ok=True)  # Ensure the data directory exists
+
+    db_filenames: Dict[str, Any] = config.get("db_filenames", {})
+>>>>>>> dev-latest
     if not db_filenames:
         logger.error("No database filenames found in config. Cannot acquire locks.")
         return False

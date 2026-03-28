@@ -20,6 +20,7 @@ build/
 # IDE Settings (Optional but recommended)
 .vscode/
 .idea/
+<<<<<<< HEAD
 
 # Logs
 *.log
@@ -33,3 +34,23 @@ bandit-report.json
 bandit.yaml
 *.sarif
 
+=======
+
+# Logs
+*.log
+
+secrets.txt
+
+KaspaGateway_Project_Full_Contents.txt
+
+# Security Audit Tools & Reports
+gitleaks.exe
+gitleaks.zip
+bandit-report.json
+bandit.yaml
+*.sarif
+
+# Local Environment & Secrets
+secrets.txt
+*_Contents.txt
+>>>>>>> dev-latest

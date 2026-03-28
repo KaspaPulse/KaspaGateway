@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -16,6 +17,13 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import LEFT, RIGHT, X
 
 from src.config.config import CONFIG
+=======
+import logging
+
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
+
+>>>>>>> dev-latest
 from src.utils.i18n import translate
 
 logger = logging.getLogger(__name__)
@@ -36,6 +44,16 @@ class Status(ttk.Frame):
         """
         super().__init__(parent)
         self.grid_columnconfigure(0, weight=1)
+<<<<<<< HEAD
+=======
+        self.label = ttk.Label(
+            self, text=translate("Ready"), anchor="w", font="-size 10"
+        )
+        self.label.grid(row=0, column=0, sticky="ew")
+
+    def update_status(self, message_key: str, *args):
+        try:
+>>>>>>> dev-latest
 
         # Status Label (Left)
         self.label = ttk.Label(
@@ -112,6 +130,7 @@ class Status(ttk.Frame):
                 exc_info=True,
             )
 
+<<<<<<< HEAD
     def re_translate(self) -> None:
         """Updates translations for the status links."""
         if self.donations_link:
@@ -126,3 +145,11 @@ class Status(ttk.Frame):
         # Optionally translate current status if it matches a simple key
         # However, status messages are dynamic, so we usually leave the current text
         # until the next update_status call.
+=======
+    def re_translate(self):
+
+        current_text_key = "Ready"
+        if "جاهز" in self.label.cget("text"):
+            current_text_key = "Ready"  # Example of mapping back, can be improved if more states are needed
+        self.update_status(current_text_key)
+>>>>>>> dev-latest

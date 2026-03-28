@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 import pandas as pd
 import ttkbootstrap as ttk
+<<<<<<< HEAD
 from ttkbootstrap.constants import (
     BOTH,
     DANGER,
@@ -29,6 +30,13 @@ from ttkbootstrap.toast import ToastNotification
 from ttkbootstrap.tooltip import ToolTip
 
 from src.api.network import fetch_top_addresses, fetch_address_names
+=======
+from ttkbootstrap.constants import *
+from ttkbootstrap.toast import ToastNotification
+from ttkbootstrap.tooltip import ToolTip
+
+from src.api.network import fetch_top_addresses
+>>>>>>> dev-latest
 from src.config.config import CONFIG, get_active_api_config
 from src.export import (
     export_top_addresses_to_csv,
@@ -51,7 +59,12 @@ class TopAddressesTab(ttk.Frame):
     top Kaspa addresses by balance.
     """
 
+<<<<<<< HEAD
     main_window: MainWindow
+=======
+    # --- Type Hint Declarations ---
+    main_window: "MainWindow"
+>>>>>>> dev-latest
     _thread: Optional[threading.Thread]
     _stop_event: threading.Event
     full_df: pd.DataFrame
@@ -69,9 +82,15 @@ class TopAddressesTab(ttk.Frame):
     tree: ttk.Treeview
     context_menu: tk.Menu
 
+<<<<<<< HEAD
     def __init__(self, parent: ttk.Frame, main_window: MainWindow) -> None:
         super().__init__(parent, padding=10)
         self.main_window = main_window
+=======
+    def __init__(self, parent: ttk.Frame, main_window: "MainWindow") -> None:
+        super().__init__(parent, padding=10)
+        self.main_window: "MainWindow" = main_window
+>>>>>>> dev-latest
         self.pack(fill=BOTH, expand=True)
         self.grid_rowconfigure(2, weight=1)
         self.grid_columnconfigure(0, weight=1)
@@ -79,10 +98,16 @@ class TopAddressesTab(ttk.Frame):
         self._thread = None
         self._stop_event = threading.Event()
         self.full_df = pd.DataFrame()
+<<<<<<< HEAD
         self.sort_info = {"column": "Rank", "reverse": False}
         self.placeholder_active = False
         self.is_active = False
 
+=======
+        self.sort_info: Dict[str, Any] = {"column": "Rank", "reverse": False}
+        self.placeholder_active: bool = False
+        self.is_active: bool = False
+>>>>>>> dev-latest
         self._build_ui()
 
     def activate(self) -> None:
@@ -151,7 +176,11 @@ class TopAddressesTab(ttk.Frame):
         tree_frame.grid_columnconfigure(0, weight=1)
         tree_frame.grid_rowconfigure(0, weight=1)
 
+<<<<<<< HEAD
         columns = ("rank", "name", "address", "balance", "value")
+=======
+        columns: Tuple[str, ...] = ("rank", "name", "address", "balance", "value")
+>>>>>>> dev-latest
         self.tree = ttk.Treeview(
             tree_frame, columns=columns, show="headings", bootstyle="primary"
         )
@@ -179,8 +208,13 @@ class TopAddressesTab(ttk.Frame):
         if not sel:
             return
 
+<<<<<<< HEAD
         item = self.tree.item(sel[0])
         values = item["values"]
+=======
+        item: Dict[str, Any] = self.tree.item(sel[0])
+        values: List[str] = item["values"]
+>>>>>>> dev-latest
         if len(values) < 3:
             return
 
@@ -197,13 +231,20 @@ class TopAddressesTab(ttk.Frame):
 
             if (
                 hasattr(self.main_window, "settings_tab")
+<<<<<<< HEAD
                 and self.main_window.settings_tab
+=======
+>>>>>>> dev-latest
                 and self.main_window.settings_tab.address_tab_initialized
                 and self.main_window.settings_tab.address_tab
             ):
                 self.main_window.settings_tab.address_tab.refresh_address_list()
 
+<<<<<<< HEAD
             if hasattr(self.main_window, "explorer_tab") and self.main_window.explorer_tab:
+=======
+            if hasattr(self.main_window, "explorer_tab"):
+>>>>>>> dev-latest
                 self.main_window.explorer_tab.input_component.refresh_address_dropdown()
         else:
             ToastNotification(
@@ -235,6 +276,7 @@ class TopAddressesTab(ttk.Frame):
         if not sel:
             return
 
+<<<<<<< HEAD
         address = self.tree.item(sel[0], "values")[2]
         try:
             url = get_active_api_config()["explorer"]["address"].format(
@@ -243,6 +285,13 @@ class TopAddressesTab(ttk.Frame):
             webbrowser.open(url, new=2)
         except Exception as e:
             logger.error(f"Error opening explorer: {e}")
+=======
+        address: str = self.tree.item(sel[0], "values")[2]
+        url: str = get_active_api_config()["explorer"]["address"].format(
+            kaspaAddress=address
+        )
+        webbrowser.open(url, new=2)
+>>>>>>> dev-latest
 
     def stop(self) -> None:
         """Signals the fetching thread to stop."""
@@ -292,6 +341,7 @@ class TopAddressesTab(ttk.Frame):
                 address_list = raw_data
 
             if isinstance(address_list, list):
+<<<<<<< HEAD
                 df_data: List[Dict[str, Any]] = []
                 
                 # Optimized loop with direct dictionary lookup
@@ -307,6 +357,19 @@ class TopAddressesTab(ttk.Frame):
                         "Balance": float(item.get("amount", 0)),
                     })
                 
+=======
+                df_data: List[Dict[str, Any]] = [
+                    {
+                        "Rank": item.get("rank", i) + 1,
+                        "Known Name": self.main_window.address_names_map.get(
+                            item.get("address"), ""
+                        ),
+                        "Address": item.get("address", "N/A"),
+                        "Balance": float(item.get("amount", 0)),
+                    }
+                    for i, item in enumerate(address_list)
+                ]
+>>>>>>> dev-latest
                 self.full_df = pd.DataFrame(df_data)
             else:
                 self.full_df = pd.DataFrame()
@@ -335,6 +398,7 @@ class TopAddressesTab(ttk.Frame):
             ]
 
         if not df.empty:
+<<<<<<< HEAD
             currency_code = self.main_window.currency_var.get().upper()
             current_prices = {}
             if self.main_window.price_updater:
@@ -348,6 +412,18 @@ class TopAddressesTab(ttk.Frame):
             sort_key = self.sort_info["column"]
             if sort_key in ["Balance", "Value", "Rank"]:
                 sort_col = "Balance_float" if sort_key == "Balance" else sort_key
+=======
+            currency_code: str = self.main_window.currency_var.get().upper()
+            price: float = self.main_window.price_updater.get_current_prices().get(
+                currency_code.lower(), 0.0
+            )
+            df["Value"] = df["Balance"] * price
+            df["Balance_float"] = df["Balance"]
+
+            sort_key: str = self.sort_info["column"]
+            if sort_key in ["Balance", "Value", "Rank"]:
+                sort_col: str = "Balance_float" if sort_key == "Balance" else sort_key
+>>>>>>> dev-latest
                 df = df.sort_values(
                     by=sort_col, ascending=not self.sort_info["reverse"]
                 )
@@ -414,6 +490,7 @@ class TopAddressesTab(ttk.Frame):
         if self.full_df.empty:
             return
 
+<<<<<<< HEAD
         current_prices = {}
         if self.main_window.price_updater:
             current_prices = self.main_window.price_updater.get_current_prices()
@@ -422,11 +499,24 @@ class TopAddressesTab(ttk.Frame):
 
         for item_id in self.tree.get_children():
             values = self.tree.item(item_id, "values")
+=======
+        price: float = self.main_window.price_updater.get_current_prices().get(
+            new_currency.lower(), 0.0
+        )
+
+        for item_id in self.tree.get_children():
+            values: Tuple[str, ...] = self.tree.item(item_id, "values")
+>>>>>>> dev-latest
             try:
                 balance_str = str(values[3]).replace(",", "")
                 if balance_str:
+<<<<<<< HEAD
                     balance = float(balance_str)
                     new_value = balance * price
+=======
+                    balance: float = float(balance_str)
+                    new_value: float = balance * price
+>>>>>>> dev-latest
                     self.tree.set(
                         item_id,
                         column="value",
@@ -446,7 +536,11 @@ class TopAddressesTab(ttk.Frame):
             "value": f"Value ({currency_code})",
         }
         for col_id, text_key in headings.items():
+<<<<<<< HEAD
             translated_text = translate(text_key)
+=======
+            translated_text: str = translate(text_key)
+>>>>>>> dev-latest
             self.tree.heading(
                 col_id,
                 text=f"{translated_text} ↕",
@@ -486,7 +580,11 @@ class TopAddressesTab(ttk.Frame):
             label=translate("Copy Address"), command=self._copy_selected_address
         )
 
+<<<<<<< HEAD
         current_state = self.search_entry.cget("state")
+=======
+        current_state: str = self.search_entry.cget("state")
+>>>>>>> dev-latest
         if self.placeholder_active:
             self.search_entry.delete(0, "end")
         self._setup_placeholder()
@@ -500,9 +598,15 @@ class TopAddressesTab(ttk.Frame):
 
     def _setup_placeholder(self) -> None:
         """Sets or resets the placeholder text in the search entry."""
+<<<<<<< HEAD
         self.placeholder = translate("Search by Rank, Name, or Address...")
         self.placeholder_color = "grey"
         self.default_fg_color = self.search_entry.cget("foreground")
+=======
+        self.placeholder: str = translate("Search by Rank, Name, or Address...")
+        self.placeholder_color: str = "grey"
+        self.default_fg_color: str = self.search_entry.cget("foreground")
+>>>>>>> dev-latest
         if not self.search_entry.get() or self.placeholder_active:
             self.search_entry.delete(0, "end")
             self.search_entry.insert(0, self.placeholder)
@@ -549,12 +653,18 @@ class TopAddressesTab(ttk.Frame):
             ).show_toast()
             return
 
+<<<<<<< HEAD
         # Lock UI during export
         self.main_window.set_busy_state(True)
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         initial_filename = f"kaspa_top_addresses_{ts}.{export_format}"
         export_dir = CONFIG.get("paths", {}).get("export", ".")
+=======
+        ts: str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        initial_filename: str = f"kaspa_top_addresses_{ts}.{export_format}"
+        export_dir: str = CONFIG.get("paths", {}).get("export", ".")
+>>>>>>> dev-latest
         os.makedirs(export_dir, exist_ok=True)
 
         file_path = filedialog.asksaveasfilename(
@@ -563,7 +673,10 @@ class TopAddressesTab(ttk.Frame):
             filetypes=[(f"{export_format.upper()} files", f"*.{export_format}")],
             title=f"{translate('Save as')} {export_format.upper()}",
             initialdir=export_dir,
+<<<<<<< HEAD
             parent=self,
+=======
+>>>>>>> dev-latest
         )
 
         if not file_path:
@@ -574,6 +687,14 @@ class TopAddressesTab(ttk.Frame):
         self.main_window.status.update_status(
             f"Exporting to {export_format.upper()}..."
         )
+<<<<<<< HEAD
+=======
+        df_to_export = self.full_df.copy()
+        price: float = self.main_window.price_updater.get_current_prices().get(
+            self.main_window.currency_var.get().lower(), 0.0
+        )
+        df_to_export["Value"] = df_to_export["Balance"] * price
+>>>>>>> dev-latest
 
         df_to_export = self.full_df.copy()
         
@@ -593,10 +714,14 @@ class TopAddressesTab(ttk.Frame):
         }
 
         threading.Thread(
+<<<<<<< HEAD
             target=self._export_worker,
             args=(export_format, export_args),
             daemon=True,
             name="ExplorerExportWorker",
+=======
+            target=self._export_worker, args=(export_format, export_args), daemon=True
+>>>>>>> dev-latest
         ).start()
 
     def _export_worker(self, export_format: str, export_args: Dict[str, Any]) -> None:
@@ -605,6 +730,7 @@ class TopAddressesTab(ttk.Frame):
             f"Exporting top addresses to {export_format.upper()} at {export_args['file_path']}"
         )
         try:
+<<<<<<< HEAD
             from src.export import (
                 export_top_addresses_to_csv,
                 export_top_addresses_to_html,
@@ -612,11 +738,20 @@ class TopAddressesTab(ttk.Frame):
             )
 
             export_map = {
+=======
+            export_map: Dict[str, Callable[..., Tuple[bool, str, str]]] = {
+>>>>>>> dev-latest
                 "csv": export_top_addresses_to_csv,
                 "html": export_top_addresses_to_html,
                 "pdf": export_top_addresses_to_pdf,
             }
+<<<<<<< HEAD
             export_func = export_map.get(export_format)
+=======
+            export_func: Optional[Callable[..., Tuple[bool, str, str]]] = (
+                export_map.get(export_format)
+            )
+>>>>>>> dev-latest
 
             if not export_func:
                 raise ValueError(
@@ -624,7 +759,11 @@ class TopAddressesTab(ttk.Frame):
                 )
 
             success, msg_key, details = export_func(**export_args)
+<<<<<<< HEAD
             final_msg = (
+=======
+            final_msg: str = (
+>>>>>>> dev-latest
                 f"{translate(msg_key)}: {details}" if details else translate(msg_key)
             )
 
@@ -633,21 +772,33 @@ class TopAddressesTab(ttk.Frame):
                     logger.info(
                         f"Export successful. File saved to {export_args['file_path']}"
                     )
+<<<<<<< HEAD
                     self.after(
+=======
+                    self.main_window.after(
+>>>>>>> dev-latest
                         100,
                         self.main_window.prompt_to_open_file,
                         export_args["file_path"],
                         final_msg,
                     )
                 else:
+<<<<<<< HEAD
                     self.after(
+=======
+                    self.main_window.after(
+>>>>>>> dev-latest
                         0, lambda: messagebox.showerror(translate("Error"), final_msg)
                     )
 
         except Exception as e:
             logger.error(f"Export worker failed for top addresses: {e}", exc_info=True)
             if self.winfo_exists():
+<<<<<<< HEAD
                 self.after(
+=======
+                self.main_window.after(
+>>>>>>> dev-latest
                     0,
                     lambda: ToastNotification(
                         title=translate("Error"),
@@ -659,5 +810,11 @@ class TopAddressesTab(ttk.Frame):
         finally:
             # UNLOCK UI regardless of success or failure
             if self.winfo_exists():
+<<<<<<< HEAD
                 self.after(0, self.main_window.set_busy_state, False)
                 self.after(0, self.main_window.status.update_status, "Ready")
+=======
+                self.main_window.after(
+                    0, self.main_window.status.update_status, "Ready"
+                )
+>>>>>>> dev-latest

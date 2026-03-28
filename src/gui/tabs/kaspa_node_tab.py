@@ -2,26 +2,45 @@
 # -*- coding: utf-8 -*-
 """
 Contains the GUI tab (View) for managing a local Kaspa node (kaspad).
+<<<<<<< HEAD
 This file contains widget creation, layout logic, and UI-specific event handling.
+=======
+This file contains only widget creation and layout logic.
+>>>>>>> dev-latest
 All business logic and state are managed by KaspaNodeController.
 """
 
 from __future__ import annotations
 
 import logging
+<<<<<<< HEAD
 import os
 import platform
 import tkinter as tk
 from tkinter import END, NORMAL, DISABLED
 from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Dict, cast
+=======
+import shlex
+import tkinter as tk
+from tkinter import DISABLED, END, NORMAL
+from typing import TYPE_CHECKING, Any, List, Optional, Tuple
+>>>>>>> dev-latest
 
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import (
     BOTH,
+<<<<<<< HEAD
     DANGER,
     EW,
     INFO,
     INVERSE,
+=======
+    BOTTOM,
+    DANGER,
+    END,
+    EW,
+    INFO,
+>>>>>>> dev-latest
     LEFT,
     NSEW,
     RIGHT,
@@ -35,7 +54,11 @@ from ttkbootstrap.tooltip import ToolTip
 
 from src.gui.components.log_viewer import LogPane
 from src.utils.i18n import translate
+<<<<<<< HEAD
 from src.utils.validation import sanitize_cli_arg
+=======
+
+>>>>>>> dev-latest
 from .kaspa_node_controller import KaspaNodeController
 
 if TYPE_CHECKING:
@@ -74,12 +97,19 @@ class KaspaNodeTab(ttk.Frame):
 
     # Checkboxes
     autostart_cb: ttk.Checkbutton
+<<<<<<< HEAD
     auto_restart_cb: ttk.Checkbutton
+=======
+    auto_restart_cb: ttk.Checkbutton  # New Auto-Restart GUI Element
+>>>>>>> dev-latest
 
     # Status & Info
     db_size_frame: ttk.Frame
     db_size_label: ttk.Label
+<<<<<<< HEAD
     db_size_tooltip: ToolTip
+=======
+>>>>>>> dev-latest
     db_size_button: ttk.Button
     version_info_frame: ttk.Frame
     local_version_label: ttk.Label
@@ -271,10 +301,17 @@ class KaspaNodeTab(ttk.Frame):
         self.create_option_flag(col1, "--nologfiles", "nologfiles")
 
         ttk.Separator(col1).pack(fill=X, pady=(15, 5), padx=5)
+<<<<<<< HEAD
         self.node_download_label = ttk.Label(
             col1, text=translate("Node Download URL"), font="-size 8"
         )
         self.node_download_label.pack(anchor="w", padx=5)
+=======
+        self.node_download_label = ttk.Label(col1, text=translate("Node Download URL"), font="-size 8")
+        self.node_download_label.pack(
+            anchor="w", padx=5
+        )
+>>>>>>> dev-latest
 
         self.download_url_text = ScrolledText(
             col1, height=3, font=("Segoe UI", 8), autohide=True
@@ -367,6 +404,7 @@ class KaspaNodeTab(ttk.Frame):
         self.create_option_flag(col4, "--unsaferpc", "unsaferpc")
         self.create_option_flag(col4, "--nogrpc", "nogrpc")
 
+<<<<<<< HEAD
     def _on_appdir_change(self, *args: Any) -> None:
         """
         Callback triggered when appdir changes.
@@ -421,6 +459,8 @@ class KaspaNodeTab(ttk.Frame):
         except Exception as e:
             self.db_size_tooltip.text = f"Error resolving path: {e}"
 
+=======
+>>>>>>> dev-latest
     def _on_url_text_change(self, event: Any) -> None:
         """Enable the 'Set Default' button when text changes."""
         current_text = self.download_url_text.text.get("1.0", "end-1c").strip()
@@ -620,6 +660,10 @@ class KaspaNodeTab(ttk.Frame):
         )
         self.autostart_cb.pack(fill=X, expand=True, pady=(2, 0), anchor="w")
 
+<<<<<<< HEAD
+=======
+        # --- New Auto-Restart Checkbox ---
+>>>>>>> dev-latest
         self.auto_restart_cb = ttk.Checkbutton(
             self.controls_frame,
             text=translate("Auto-Restart on Failure"),
@@ -633,6 +677,10 @@ class KaspaNodeTab(ttk.Frame):
                 "Automatically restart the node if it crashes or stops unexpectedly."
             ),
         )
+<<<<<<< HEAD
+=======
+        # ---------------------------------
+>>>>>>> dev-latest
 
         self.db_size_frame = ttk.Frame(self.controls_frame, padding=(0, 2))
         self.db_size_frame.pack(fill=X, expand=True, pady=(2, 0))
@@ -927,7 +975,14 @@ class KaspaNodeTab(ttk.Frame):
 
         if hasattr(self, "node_download_label"):
             self.node_download_label.config(text=translate("Node Download URL"))
+<<<<<<< HEAD
         
+=======
+        if hasattr(self, "download_url_text"):
+            # Label for download URL
+            pass
+
+>>>>>>> dev-latest
         if hasattr(self, "set_default_url_button"):
             self.set_default_url_button.config(text=translate("Set Default"))
 
@@ -1050,3 +1105,7 @@ class KaspaNodeTab(ttk.Frame):
             self.controller.latest_node_date_var.set(
                 f"{translate('Updated')}: {current_date}"
             )
+<<<<<<< HEAD
+=======
+
+>>>>>>> dev-latest
